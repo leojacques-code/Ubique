@@ -34,6 +34,7 @@ async function readTab(tab: string, background = false): Promise<Record<string,s
 async function writeAll(tab: string, rows: Record<string,unknown>[], background = false) {
   const id = await ensureSpreadsheet(background);
   if (!id) throw new Error('Google Sheets is not connected');
+  if (!rows.length) return;
   const keys = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
   const matrix = [keys, ...rows.map(r => keys.map(k => {
     const v = r[k];
@@ -58,7 +59,7 @@ export async function listApplications(background = false): Promise<Application[
   const token = await getGoogleAccessToken(background);
   if (!token) return demoApplications;
   const rows = await readTab('Applications', background);
-  return rows.length ? rows.map(parseApplication) : demoApplications;
+  return rows.map(parseApplication);
 }
 
 export async function getApplication(id:string, background = false) {
@@ -79,7 +80,7 @@ export async function listContacts(background = false): Promise<Contact[]> {
   const token = await getGoogleAccessToken(background);
   if (!token) return demoContacts;
   const rows = await readTab('Contacts', background);
-  return rows.length ? rows.map(r => ({...r,alumniSkema:r.alumniSkema==='true'} as unknown as Contact)) : demoContacts;
+  return rows.map(r => ({...r,alumniSkema:r.alumniSkema==='true'} as unknown as Contact));
 }
 
 export async function listInteractions(background = false): Promise<Interaction[]> {
