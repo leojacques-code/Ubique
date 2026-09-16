@@ -20,6 +20,10 @@ export function OpportunityCapture() {
     };
     const res=await fetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json(); setBusy(false);
+    if(res.status===409&&data.duplicateId){
+      location.href=`/applications/${data.duplicateId}`;
+      return;
+    }
     if(!res.ok){setMessage(data.error||'Impossible d’ajouter l’offre.');return;}
     location.href=`/applications/${data.id}`;
   }
