@@ -31,15 +31,17 @@ async function readTab(tab: string, background = false): Promise<Record<string,s
   return values.slice(1).filter(row => row.some(v => v !== '')).map(row => Object.fromEntries(headers.map((h,i) => [h,row[i] ?? ''])));
 }
 
-async function clearTab(tab:string,id:string,background=false) {
-  await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(tab + '!A:AZ')}:clear`, { method:'POST', body:'{}' }, background);
+async function clearRange(tab:string,range:string,id:string,background=false) {
+  await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(`${tab}!${range}`)}:clear`, { method:'POST', body:'{}' }, background);
 }
 
 async function writeAll(tab: string, rows: Record<string,unknown>[], background = false) {
   const id = await ensureSpreadsheet(background);
   if (!id) throw new Error('Google Sheets is not connected');
-  await clearTab(tab,id,background);
-  if (!rows.length) return;
+  if (!rows.length) {
+    await clearRange(tab,'A:AZ',id,background);
+    return;
+  }
   const keys = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
   const matrix = [keys, ...rows.map(r => keys.map(k => {
     const v = r[k];
@@ -47,6 +49,7 @@ async function writeAll(tab: string, rows: Record<string,unknown>[], background 
     return v == null ? '' : String(v);
   }))];
   await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(tab + '!A1')}?valueInputOption=RAW`, { method:'PUT', body:JSON.stringify({range:`${tab}!A1`,majorDimension:'ROWS',values:matrix}) }, background);
+  await clearRange(tab,`A${matrix.length+1}:AZ`,id,background);
 }
 
 function parseApplication(row: Record<string,string>): Application {
