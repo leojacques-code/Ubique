@@ -4,16 +4,20 @@ import { coverLetterPrompt, emailPrompt, jobAnalysisPrompt, linkedinPrompt, matc
 import { fetchPublicPage, searchWeb } from './research';
 import { gmailSearch } from './google';
 
+const MAX_JOB_SNAPSHOT_CHARS=80000;
+
 export async function prepareApplication(app: Application): Promise<PreparationResult> {
   const jobSnapshot = app.jobSnapshot || await fetchPublicPage(app.officialUrl);
   if (!jobSnapshot) throw new Error('Add the job description or a readable official URL before preparing.');
+  if (jobSnapshot.length>MAX_JOB_SNAPSHOT_CHARS) throw new Error('La fiche de poste dépasse 80 000 caractères. Réduis-la au contenu utile avant préparation.');
   const jobAnalysis = await aiJson<PreparationResult['jobAnalysis']>(jobAnalysisPrompt, jobSnapshot, {maxOutputTokens:2200});
   const companyHits = await searchWeb(`${app.company} ${app.jobTitle} careers team deals investment strategy`);
   const freshResearch = companyHits.length ? companyHits.map(r => `${r.title}\n${r.url}\n${r.content}`).join('\n\n') : '';
   const companyResearch = [app.companyResearch?.trim(),freshResearch.trim()].filter(Boolean).join('\n\n---\n\n').slice(0,60000) || 'No external search provider configured. Use only the supplied job description and verified user data.';
   let gmailHistory = 'No Gmail history available.';
   try {
-    const mails = await gmailSearch(`"${app.company.replace(/"/g,'')}" -from:jobalerts-noreply@linkedin.com`);
+    const safeCompany=app.company.replace(/["\\]/g,' ').trim().slice(0,160);
+    const mails = await gmailSearch(`"${safeCompany}" -from:jobalerts-noreply@linkedin.com`);
     gmailHistory = mails.slice(0,8).map(m => `${m.date} | ${m.subject} | ${m.from} | ${m.snippet}`).join('\n') || 'No prior email found.';
   } catch {}
   const match = await aiJson<{evidenceMap:PreparationResult['evidenceMap'];strengths:string[];gaps:string[];recommendedCv:string}>(matchingPrompt, JSON.stringify({job:jobAnalysis,jobSnapshot,companyResearch,gmailHistory}), {maxOutputTokens:3000});
