@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { listApplications } from '@/lib/store';
+import { dateInTimeZone } from '@/lib/dates';
 
 export default async function Dashboard() {
   const apps = await listApplications();
   const count=(s:string)=>apps.filter(a=>a.status===s).length;
-  const today=new Date().toISOString().slice(0,10);
+  const today=dateInTimeZone();
   const due=apps.filter(a=>a.nextActionDate && a.nextActionDate<=today && !['Clôturée','Refus'].includes(a.status)).sort((a,b)=>(a.nextActionDate||'').localeCompare(b.nextActionDate||''));
   const active=apps.filter(a=>a.status==='En process');
   return <div className="page">
