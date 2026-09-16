@@ -4,7 +4,7 @@ on:
   push:
     branches: [build/v1-application-crm]
     paths:
-      - '.bootstrap/ubique-v1.b64'
+      - '.bootstrap/part-*'
       - '.github/workflows/bootstrap.yml'
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ jobs:
           ref: build/v1-application-crm
       - name: Expand project archive
         run: |
-          base64 -d .bootstrap/ubique-v1.b64 > /tmp/ubique-v1.tgz
+          cat .bootstrap/part-* | base64 -d > /tmp/ubique-v1.tgz
           tar -xzf /tmp/ubique-v1.tgz -C .
           rm -rf .bootstrap
       - name: Commit generated application
