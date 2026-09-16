@@ -23,7 +23,7 @@ export default async function ApplicationPage({params}:{params:Promise<{id:strin
   const analysis=app.jobAnalysis;
   return <div className="page">
     <section className="application-hero">
-      <div className="row"><span className={`priority p-${app.priority.toLowerCase()}`}>{app.priority}</span><span className="badge">{app.status}</span><span className="badge">{app.stage}</span>{app.fitScore&&<span className="badge">Fit {app.fitScore}/10</span>}</div>
+      <div className="row"><span className={`priority p-${app.priority.toLowerCase()}`}>{app.priority}</span><span className="badge">{app.status}</span><span className="badge">{app.stage}</span>{app.fitScore!==undefined&&<span className="badge">Fit {app.fitScore}/10</span>}</div>
       <h1>{app.company}</h1><p>{app.jobTitle} · {app.location||'Localisation à confirmer'} · {app.contractType||'Contrat à confirmer'}</p>
       <ApplicationActions id={app.id} hasEmail={hasEmail}/>
     </section>
@@ -38,7 +38,7 @@ export default async function ApplicationPage({params}:{params:Promise<{id:strin
       </div>
       <aside className="section-stack">
         <section className="panel"><h2>Prochaine action</h2><strong>{app.nextAction||'À définir'}</strong><p className="muted">{app.nextActionDate||''}</p></section>
-        <section className="panel"><h2>Contacts</h2>{companyContacts.length?companyContacts.slice(0,6).map(c=><p key={`${c.id}-${c.email||c.linkedin||c.name}`}><strong>{c.name}</strong><br/><span className="muted">{c.role} · {c.emailStatus}</span>{c.email&&<><br/><span className="muted">{c.email}</span></>}{c.linkedin&&<><br/><a className="muted" href={c.linkedin} target="_blank" rel="noreferrer">LinkedIn ↗</a></>}</p>):<p className="muted">Aucun contact en base.</p>}</section>
+        <section className="panel"><h2>Contacts</h2>{companyContacts.length?companyContacts.slice(0,6).map(c=><div className="contact-card" key={`${c.id}-${c.email||c.linkedin||c.name}`}><div className="row between"><strong>{c.name}</strong>{c.relevance&&<span className="badge">{c.relevance}</span>}</div><div className="muted">{c.role} · {c.emailStatus}</div>{c.email&&<div className="muted">{c.email}</div>}{c.notes&&<p className="contact-note">{c.notes}</p>}<div className="contact-links">{c.linkedin&&<a href={c.linkedin} target="_blank" rel="noreferrer">LinkedIn ↗</a>}{c.source&&<a href={c.source} target="_blank" rel="noreferrer">Source · {sourceLabel(c.source)} ↗</a>}</div></div>):<p className="muted">Aucun contact en base.</p>}</section>
         <section className="panel"><h2>Documents</h2><p>CV · {app.cvVersion||'À sélectionner'}</p><p>LM · {app.coverLetterReady?'Prête':'À préparer'}</p><p>Email · {app.emailReady?'Prêt':'À préparer'}</p><p>LinkedIn · {app.linkedinReady?'Prêt':'À préparer'}</p></section>
         <section className="panel"><h2>Sources</h2>{sourceUrls.length?<div className="source-list">{sourceUrls.slice(0,10).map((url,i)=><a key={url} href={url} target="_blank" rel="noreferrer" className={i===0&&url===app.officialUrl?'button':'source-link'}>{i===0&&url===app.officialUrl?'Offre officielle':sourceLabel(url)} ↗</a>)}</div>:<p className="muted">Aucune source publique enregistrée.</p>}</section>
         {app.companyResearch&&<section className="panel"><h2>Recherche entreprise</h2><div className="doc-box">{app.companyResearch}</div></section>}
