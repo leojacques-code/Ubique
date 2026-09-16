@@ -9,7 +9,8 @@ export async function prepareApplication(app: Application): Promise<PreparationR
   if (!jobSnapshot) throw new Error('Add the job description or a readable official URL before preparing.');
   const jobAnalysis = await aiJson<PreparationResult['jobAnalysis']>(jobAnalysisPrompt, jobSnapshot, {maxOutputTokens:2200});
   const companyHits = await searchWeb(`${app.company} ${app.jobTitle} careers team deals investment strategy`);
-  const companyResearch = companyHits.length ? companyHits.map(r => `${r.title}\n${r.url}\n${r.content}`).join('\n\n').slice(0,50000) : 'No external search provider configured. Use only the supplied job description and verified user data.';
+  const freshResearch = companyHits.length ? companyHits.map(r => `${r.title}\n${r.url}\n${r.content}`).join('\n\n') : '';
+  const companyResearch = [app.companyResearch?.trim(),freshResearch.trim()].filter(Boolean).join('\n\n---\n\n').slice(0,60000) || 'No external search provider configured. Use only the supplied job description and verified user data.';
   let gmailHistory = 'No Gmail history available.';
   try {
     const mails = await gmailSearch(`"${app.company.replace(/"/g,'')}" -from:jobalerts-noreply@linkedin.com`);
