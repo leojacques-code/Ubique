@@ -22,7 +22,7 @@ export async function prepareApplication(app: Application): Promise<PreparationR
     aiText(emailPrompt, context),
     aiText(linkedinPrompt, context)
   ]);
-  return { jobAnalysis, evidenceMap:match.evidenceMap, strengths:match.strengths, gaps:match.gaps, companyResearch, recommendedCv:match.recommendedCv, coverLetter, applicationEmail, linkedinMessage, nextAction:'Relire les livrables puis candidater via le canal officiel.' };
+  return { jobSnapshot, jobAnalysis, evidenceMap:match.evidenceMap, strengths:match.strengths, gaps:match.gaps, companyResearch, recommendedCv:match.recommendedCv, coverLetter, applicationEmail, linkedinMessage, nextAction:'Relire les livrables puis candidater via le canal officiel.' };
 }
 
 export async function classifyApplicationEmail(app: Application, mail: {subject:string;from:string;snippet:string}) {
