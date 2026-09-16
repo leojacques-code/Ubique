@@ -1,0 +1,2 @@
+import { NextRequest, NextResponse } from 'next/server'; import { getApplication, saveApplication } from '@/lib/store';
+export async function PATCH(req:NextRequest,{params}:{params:Promise<{id:string}>}){try{const {id}=await params;const app=await getApplication(id);if(!app)return NextResponse.json({error:'Not found'},{status:404});const patch=await req.json();Object.assign(app,patch,{updatedAt:new Date().toISOString()});await saveApplication(app);return NextResponse.json(app)}catch(e:any){return NextResponse.json({error:e.message},{status:400})}}
