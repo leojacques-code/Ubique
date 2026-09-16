@@ -5,6 +5,7 @@ import { createGmailDraft } from '@/lib/google';
 import { isOwnerRequest } from '@/lib/authz';
 import { enrichApplicationResearch } from '@/lib/enrichment';
 import { Contact } from '@/lib/types';
+import { addDaysToDateOnly, dateInTimeZone } from '@/lib/dates';
 
 function mergeContacts(existing:Contact[],incoming:Contact[]){
   const key=(c:Contact)=>`${c.company}|${c.email||c.linkedin||c.name}|${c.role}`.toLowerCase();
@@ -59,11 +60,11 @@ export async function POST(req:NextRequest){
     }
 
     if(action==='mark-sent'){
+      const today=dateInTimeZone();
       app.status='Envoyée';
-      app.applicationDate=new Date().toISOString().slice(0,10);
-      const d=new Date();d.setDate(d.getDate()+7);
+      app.applicationDate=today;
       app.nextAction='Relancer si aucun retour et si le contexte le justifie';
-      app.nextActionDate=d.toISOString().slice(0,10);
+      app.nextActionDate=addDaysToDateOnly(today,7);
       await saveApplication(app);
       return NextResponse.json({message:'Candidature marquée comme envoyée.'});
     }
