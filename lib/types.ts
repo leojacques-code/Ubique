@@ -92,6 +92,7 @@ export interface Interaction {
 }
 
 export interface PreparationResult {
+  jobSnapshot: string;
   jobAnalysis: {
     missions: string[];
     mustHave: string[];
