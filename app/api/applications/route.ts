@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { listApplications, saveApplication } from '@/lib/store';
 import { Application, Priority } from '@/lib/types';
 import { isOwnerRequest } from '@/lib/authz';
+import { dateInTimeZone } from '@/lib/dates';
 
 const PRIORITIES = new Set<Priority>(['A','B','C']);
 const VERTICALS = new Set(['Private Equity','Hedge Fund / Public Markets','Private Credit','M&A / IB','Corporate Development','Transaction Services','Asset Management','Venture Capital']);
@@ -75,7 +76,7 @@ export async function POST(req:NextRequest){
       deadline:String(body.deadline||'').trim().slice(0,40)||undefined,
       channel:String(body.channel||'').trim().slice(0,120)||undefined,
       vertical,priority,careerPriority:priority,status:'Inbox',stage:'Candidature',
-      nextAction:'Analyser et vérifier la source officielle',nextActionDate:now.slice(0,10),createdAt:now,updatedAt:now
+      nextAction:'Analyser et vérifier la source officielle',nextActionDate:dateInTimeZone(),createdAt:now,updatedAt:now
     };
     await saveApplication(app);
     return NextResponse.json(app,{status:201});
