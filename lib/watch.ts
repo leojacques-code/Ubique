@@ -4,6 +4,7 @@ import { searchWeb } from './research';
 import { listApplications, saveApplication } from './store';
 import { Application } from './types';
 import { coreRules } from './prompts';
+import { dateInTimeZone } from './dates';
 
 const queries = [
   'Private Equity Investment Analyst Intern Paris January 2027',
@@ -34,7 +35,7 @@ export async function runWatch() {
     if (known.has(fingerprint(company,jobTitle))) continue;
     const vertical=(job.vertical||[]).filter(v=>allowedVerticals.has(v));
     const now = new Date().toISOString();
-    const app:Application = { id:crypto.randomUUID(),company,jobTitle,location:job.location,officialUrl:url,sourceUrls:[url],startDate:job.startDate,vertical,priority:job.priority || 'B',careerPriority:job.priority || 'B',status:'Inbox',stage:'Candidature',nextAction:'Analyser et vérifier la source officielle',nextActionDate:now.slice(0,10),createdAt:now,updatedAt:now };
+    const app:Application = { id:crypto.randomUUID(),company,jobTitle,location:job.location,officialUrl:url,sourceUrls:[url],startDate:job.startDate,vertical,priority:job.priority || 'B',careerPriority:job.priority || 'B',status:'Inbox',stage:'Candidature',nextAction:'Analyser et vérifier la source officielle',nextActionDate:dateInTimeZone(),createdAt:now,updatedAt:now };
     await saveApplication(app,true);
     known.add(fingerprint(company,jobTitle));
     added++;
