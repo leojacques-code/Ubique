@@ -46,7 +46,8 @@ export async function googleFetch<T>(url: string, init: RequestInit = {}, backgr
 }
 
 export async function gmailSearch(query: string, background = false) {
-  const list = await googleFetch<{messages?:{id:string;threadId:string}[]}>(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=20`, {}, background);
+  const safeQuery=query.replace(/[\r\n]/g,' ').trim().slice(0,800);
+  const list = await googleFetch<{messages?:{id:string;threadId:string}[]}>(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(safeQuery)}&maxResults=20`, {}, background);
   if (!list.messages?.length) return [];
   return Promise.all(list.messages.map(async ({id}) => {
     const msg = await googleFetch<any>(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`, {}, background);
@@ -59,8 +60,17 @@ function encodeHeader(value:string){
   return `=?UTF-8?B?${Buffer.from(value,'utf8').toString('base64')}?=`;
 }
 
+function safeMailbox(value:string){
+  const email=value.trim();
+  if(/[\r\n]/.test(email)||email.length>320||!/^\S+@\S+\.\S+$/.test(email))throw new Error('Adresse email de brouillon invalide');
+  return email;
+}
+
 export async function createGmailDraft(to: string, subject: string, body: string) {
-  const raw = Buffer.from([`To: ${to}`,`Subject: ${encodeHeader(subject)}`,'MIME-Version: 1.0','Content-Type: text/plain; charset="UTF-8"','Content-Transfer-Encoding: 8bit','',body].join('\r\n')).toString('base64url');
+  const mailbox=safeMailbox(to);
+  const cleanSubject=subject.replace(/[\r\n]+/g,' ').trim().slice(0,240)||'Candidature';
+  const cleanBody=body.replace(/\u0000/g,'').slice(0,120000);
+  const raw = Buffer.from([`To: ${mailbox}`,`Subject: ${encodeHeader(cleanSubject)}`,'MIME-Version: 1.0','Content-Type: text/plain; charset="UTF-8"','Content-Transfer-Encoding: 8bit','',cleanBody].join('\r\n')).toString('base64url');
   return googleFetch<any>('https://gmail.googleapis.com/gmail/v1/users/me/drafts', { method:'POST', body:JSON.stringify({message:{raw}}) });
 }
 
