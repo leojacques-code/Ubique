@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "preflight": "node scripts/preflight.mjs",
     "security:scan": "node scripts/secret-scan.mjs",
-    "verify": "npm run security:scan && npm run typecheck && npm run build"
+    "verify": "npm run security:scan && npm run typecheck && npm run build",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "next": "^15.5.0",
