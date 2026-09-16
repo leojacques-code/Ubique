@@ -17,6 +17,15 @@ export interface EvidenceItem {
   confidence: number;
 }
 
+export interface JobAnalysis {
+  missions: string[];
+  mustHave: string[];
+  niceToHave: string[];
+  recruiterTests: string[];
+  vertical?: string[];
+  timingIssues?: string[];
+}
+
 export interface Application {
   id: string;
   company: string;
@@ -52,6 +61,7 @@ export interface Application {
   applicationEmail?: string;
   linkedinMessage?: string;
   jobSnapshot?: string;
+  jobAnalysis?: JobAnalysis;
   companyResearch?: string;
   evidenceMap?: EvidenceItem[];
   createdAt: string;
@@ -93,12 +103,7 @@ export interface Interaction {
 
 export interface PreparationResult {
   jobSnapshot: string;
-  jobAnalysis: {
-    missions: string[];
-    mustHave: string[];
-    niceToHave: string[];
-    recruiterTests: string[];
-  };
+  jobAnalysis: JobAnalysis;
   evidenceMap: EvidenceItem[];
   strengths: string[];
   gaps: string[];
