@@ -1,4 +1,35 @@
 import { notFound } from 'next/navigation';
-import { getApplication } from '@/lib/store';
+import { getApplication, listContacts } from '@/lib/store';
 import { ApplicationActions } from '@/components/ApplicationActions';
-export default async function ApplicationPage({params}:{params:Promise<{id:string}>}){const {id}=await params;const app=await getApplication(id);if(!app)notFound();const contactEmail=app.contacts?.find(c=>c.email)?.email;return <div className="page"><section className="application-hero"><div className="row"><span className={`priority p-${app.priority.toLowerCase()}`}>{app.priority}</span><span className="badge">{app.status}</span><span className="badge">{app.stage}</span>{app.fitScore&&<span className="badge">Fit {app.fitScore}/10</span>}</div><h1>{app.company}</h1><p>{app.jobTitle} · {app.location||'Localisation à confirmer'} · {app.contractType||'Contrat à confirmer'}</p><ApplicationActions id={app.id} hasEmail={!!contactEmail}/></section><div className="grid two-col"><div className="section-stack"><section className="panel"><h2>Pourquoi ça matche</h2>{(app.strengths||[]).map(x=><p key={x}>✓ {x}</p>)}<h2 style={{marginTop:22}}>Vigilances</h2>{(app.gaps||[]).map(x=><p key={x} className="muted">• {x}</p>)}</section><section className="panel"><h2>Evidence Engine</h2>{app.evidenceMap?.length?app.evidenceMap.map((e,i)=><div className="evidence" key={i}><strong>{e.requirement}</strong><span>{e.evidence}<br/><small className="muted">{e.source}</small></span><span className="badge">{e.evidenceType}</span></div>):<p className="muted">Lance « Préparer la candidature » pour générer le mapping des preuves.</p>}</section>{app.coverLetter&&<section className="panel"><h2>Lettre de motivation</h2><div className="doc-box">{app.coverLetter}</div></section>}{app.applicationEmail&&<section className="panel"><h2>Email</h2><div className="doc-box">{app.applicationEmail}</div></section>}{app.linkedinMessage&&<section className="panel"><h2>LinkedIn</h2><div className="doc-box">{app.linkedinMessage}</div></section>}</div><aside className="section-stack"><section className="panel"><h2>Prochaine action</h2><strong>{app.nextAction||'À définir'}</strong><p className="muted">{app.nextActionDate||''}</p></section><section className="panel"><h2>Documents</h2><p>CV · {app.cvVersion||'À sélectionner'}</p><p>LM · {app.coverLetterReady?'Prête':'À préparer'}</p><p>Email · {app.emailReady?'Prêt':'À préparer'}</p><p>LinkedIn · {app.linkedinReady?'Prêt':'À préparer'}</p></section><section className="panel"><h2>Source</h2>{app.officialUrl?<a href={app.officialUrl} target="_blank" rel="noreferrer" className="button">Ouvrir l’offre officielle</a>:<p className="muted">URL officielle à ajouter.</p>}</section>{app.companyResearch&&<section className="panel"><h2>Recherche entreprise</h2><div className="doc-box">{app.companyResearch}</div></section>}</aside></div></div>}
+
+export default async function ApplicationPage({params}:{params:Promise<{id:string}>}){
+  const {id}=await params;
+  const app=await getApplication(id);
+  if(!app)notFound();
+  const globalContacts=await listContacts();
+  const companyContacts=globalContacts.filter(c=>c.company.toLowerCase()===app.company.toLowerCase());
+  const hasEmail=!![...(app.contacts||[]),...companyContacts].find(c=>c.email);
+  return <div className="page">
+    <section className="application-hero">
+      <div className="row"><span className={`priority p-${app.priority.toLowerCase()}`}>{app.priority}</span><span className="badge">{app.status}</span><span className="badge">{app.stage}</span>{app.fitScore&&<span className="badge">Fit {app.fitScore}/10</span>}</div>
+      <h1>{app.company}</h1><p>{app.jobTitle} · {app.location||'Localisation à confirmer'} · {app.contractType||'Contrat à confirmer'}</p>
+      <ApplicationActions id={app.id} hasEmail={hasEmail}/>
+    </section>
+    <div className="grid two-col">
+      <div className="section-stack">
+        <section className="panel"><h2>Pourquoi ça matche</h2>{(app.strengths||[]).map(x=><p key={x}>✓ {x}</p>)}<h2 style={{marginTop:22}}>Vigilances</h2>{(app.gaps||[]).map(x=><p key={x} className="muted">• {x}</p>)}</section>
+        <section className="panel"><h2>Evidence Engine</h2>{app.evidenceMap?.length?app.evidenceMap.map((e,i)=><div className="evidence" key={i}><strong>{e.requirement}</strong><span>{e.evidence}<br/><small className="muted">{e.source}</small></span><span className="badge">{e.evidenceType}</span></div>):<p className="muted">Lance « Préparer la candidature » pour générer le mapping des preuves.</p>}</section>
+        {app.coverLetter&&<section className="panel"><h2>Lettre de motivation</h2><div className="doc-box">{app.coverLetter}</div></section>}
+        {app.applicationEmail&&<section className="panel"><h2>Email</h2><div className="doc-box">{app.applicationEmail}</div></section>}
+        {app.linkedinMessage&&<section className="panel"><h2>LinkedIn</h2><div className="doc-box">{app.linkedinMessage}</div></section>}
+      </div>
+      <aside className="section-stack">
+        <section className="panel"><h2>Prochaine action</h2><strong>{app.nextAction||'À définir'}</strong><p className="muted">{app.nextActionDate||''}</p></section>
+        <section className="panel"><h2>Contacts</h2>{companyContacts.length?companyContacts.slice(0,4).map(c=><p key={c.id}><strong>{c.name}</strong><br/><span className="muted">{c.role} · {c.emailStatus}</span></p>):<p className="muted">Aucun contact en base.</p>}</section>
+        <section className="panel"><h2>Documents</h2><p>CV · {app.cvVersion||'À sélectionner'}</p><p>LM · {app.coverLetterReady?'Prête':'À préparer'}</p><p>Email · {app.emailReady?'Prêt':'À préparer'}</p><p>LinkedIn · {app.linkedinReady?'Prêt':'À préparer'}</p></section>
+        <section className="panel"><h2>Source</h2>{app.officialUrl?<a href={app.officialUrl} target="_blank" rel="noreferrer" className="button">Ouvrir l’offre officielle</a>:<p className="muted">URL officielle à ajouter.</p>}</section>
+        {app.companyResearch&&<section className="panel"><h2>Recherche entreprise</h2><div className="doc-box">{app.companyResearch}</div></section>}
+      </aside>
+    </div>
+  </div>;
+}
