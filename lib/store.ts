@@ -88,6 +88,17 @@ export async function listContacts(background = false): Promise<Contact[]> {
   return rows.map(r => ({...r,alumniSkema:r.alumniSkema==='true'} as unknown as Contact));
 }
 
+export async function saveContacts(items: Contact[], background = false) {
+  if (!items.length) return;
+  const token = await getGoogleAccessToken(background);
+  if (!token) throw new Error('Google Sheets is not connected; contacts cannot be persisted.');
+  const existing = await listContacts(background);
+  const key=(c:Contact)=>`${c.company}|${c.email||c.linkedin||c.name}|${c.role}`.toLowerCase();
+  const map = new Map(existing.map(x => [key(x),x]));
+  items.forEach(x => map.set(key(x),x));
+  await writeAll('Contacts', [...map.values()] as unknown as Record<string,unknown>[], background);
+}
+
 export async function listInteractions(background = false): Promise<Interaction[]> {
   const token = await getGoogleAccessToken(background);
   if (!token) return [];
