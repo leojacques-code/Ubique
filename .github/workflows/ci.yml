@@ -14,10 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - name: Secret scan
         run: node scripts/secret-scan.mjs
       - name: Install
-        run: npm install
+        run: npm ci
       - name: Dependency audit (critical)
         run: npm audit --audit-level=critical
       - name: Typecheck
