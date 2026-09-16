@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApplication, listContacts, saveApplication } from '@/lib/store';
 import { prepareApplication } from '@/lib/engine';
 import { createGmailDraft } from '@/lib/google';
+import { isOwnerRequest } from '@/lib/authz';
 
 export async function POST(req:NextRequest){
   try{
+    if(!(await isOwnerRequest()))return NextResponse.json({error:'Connexion propriétaire requise.'},{status:401});
     const {action,applicationId}=await req.json();
     const app=await getApplication(applicationId);
     if(!app)return NextResponse.json({error:'Candidature introuvable'},{status:404});
