@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { listApplications, saveApplication } from '@/lib/store';
 import { Application, Priority } from '@/lib/types';
+import { isOwnerRequest } from '@/lib/authz';
 
 const PRIORITIES = new Set<Priority>(['A','B','C']);
 const VERTICALS = new Set(['Private Equity','Hedge Fund / Public Markets','Private Credit','M&A / IB','Corporate Development','Transaction Services','Asset Management','Venture Capital']);
@@ -12,6 +13,7 @@ export async function GET(){
 
 export async function POST(req:NextRequest){
   try{
+    if(!(await isOwnerRequest()))return NextResponse.json({error:'Connexion propriétaire requise.'},{status:401});
     const body=await req.json();
     const company=String(body.company||'').trim();
     const jobTitle=String(body.jobTitle||'').trim();
