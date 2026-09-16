@@ -2,53 +2,150 @@
 
 Tu reprends **Ubique** avec une contrainte de temps forte. Tu n'as pas le droit de repartir de zéro ni de réauditer toute l'architecture.
 
-Commence par lire `docs/ASTRA_HANDOFF.md`, puis inspecte immédiatement ton workspace local et compare-le à `origin/build/v1-application-crm`.
+Commence par lire `docs/ASTRA_HANDOFF.md`. Il contient l'état consolidé le plus récent et la hiérarchie entre ton travail local et les compléments GitHub.
 
 ## Règle principale
 
-**Ton workspace local est prioritaire lorsqu'il contient une version plus avancée ou déjà testée. La branche GitHub contient des compléments : tu dois porter seulement le delta utile. Ne remplace jamais une implémentation locale plus robuste par une version GitHub plus simple.**
+**Ton workspace local est prioritaire lorsqu'il contient une version plus avancée ou déjà testée. La branche `origin/build/v1-application-crm` contient des compléments : porte seulement le delta utile. Ne remplace jamais une implémentation locale plus robuste par une version GitHub plus simple.**
 
-Tu disposes d'environ quatre heures de crédit. Ton objectif n'est pas de perfectionner le produit, mais de rendre la V1 réellement terminée, sauvegardée et déployable avec le minimum de consommation.
+Tu disposes de peu de crédit. Ton objectif est de rendre la V1 réellement terminée, sauvegardée et déployée, pas de perfectionner l'architecture.
 
 ## Ordre obligatoire
 
-1. Fais `git status` et `git diff --stat`.
-2. Sauvegarde immédiatement tout travail local non versionné dans un commit checkpoint avant toute réconciliation.
-3. `git fetch origin` puis compare le local à `origin/build/v1-application-crm`.
-4. Réutilise uniquement les compléments qui manquent réellement dans ton local.
-5. Préserve absolument les éléments déjà plus avancés localement, notamment documents versionnés, Gmail sync batchée/reprenable, validations de statuts et tests ciblés.
-6. Termine les trous fonctionnels nécessaires à un parcours end-to-end : créer/importer une opportunité -> analyser -> Evidence Engine -> générer LM/email/LinkedIn -> enregistrer -> créer un brouillon Gmail -> mettre à jour le pipeline.
-7. Exécute les tests ciblés existants, `npm run typecheck`, le build et le secret scan. Corrige seulement les échecs bloquants.
-8. Obtiens un déploiement Vercel au minimum en mode démo. Ensuite seulement branche les intégrations réelles.
-9. Utilise `OPENAI_API_KEY` uniquement depuis l'environnement local/Vercel. **Ne l'affiche jamais et ne la commit jamais.** Le code doit continuer à lire la variable d'environnement et garder `OPENAI_MODEL` configurable.
-10. Si les identifiants Google sont disponibles, valide OAuth -> Sheet -> brouillon Gmail. Sinon, laisse un chemin de configuration propre et documenté sans bloquer le mode démo.
-11. Fais un dernier commit et push. Si quelque chose reste bloqué, écris exactement le blocage, la cause et l'action suivante dans `docs/ASTRA_HANDOFF.md` au lieu de lancer une nouvelle refonte.
+### 1. Sauvegarde locale immédiate
+
+Exécute d'abord :
+
+```bash
+git status
+git diff --stat
+git add -A
+git commit -m "checkpoint: Astra local Ubique before GitHub reconciliation" || true
+```
+
+Si possible, pousse immédiatement une branche de sauvegarde. Ne fais aucun merge/reset/rebase risquant de perdre le local avant ce checkpoint.
+
+### 2. Compare, ne réécris pas
+
+```bash
+git fetch origin
+git diff --stat HEAD..origin/build/v1-application-crm
+git diff HEAD..origin/build/v1-application-crm -- docs .github app lib components scripts package.json package-lock.json
+```
+
+Porte seulement les comportements absents du local. Conserve en priorité les versions locales déjà plus avancées de : documents/PDF/DOCX versionnés, Gmail sync batchée/reprenable, validations de changements de statut, tests ciblés et tout module ayant déjà une meilleure couverture.
+
+Les deltas GitHub à regarder en priorité sont listés dans `docs/ASTRA_HANDOFF.md`, notamment sécurité propriétaire, OpenAI à coût borné, recherche cross-platform/contact mapping vérifié, job snapshot/job analysis, lockfile/CI/preflight/smoke et protections Google/Vercel.
+
+### 3. Termine uniquement le parcours principal
+
+Le parcours doit fonctionner :
+
+`créer/importer offre -> recherche éventuelle -> reconstituer l'offre -> Evidence Engine -> LM/email/LinkedIn -> sauvegarder -> brouillon Gmail -> pipeline`.
+
+Aucun envoi automatique.
+
+### 4. Une seule validation après réconciliation
+
+```bash
+npm run security:scan
+npm run typecheck
+npm run build
+```
+
+Puis lance les tests ciblés Astra existants, notamment zéro invention, auto-status et PDF une page. Corrige uniquement les erreurs bloquantes. Ne relance pas toute la batterie après chaque micro-changement.
+
+### 5. Déploie Vercel avant tout polish
+
+Il n'existe actuellement aucun projet Vercel Ubique sur l'équipe `LECH`. Crée/importe donc `leojacques-code/Ubique` dans Vercel.
+
+Objectif d'abord : déploiement **mode démo** vert. Ensuite seulement configure les secrets.
+
+Variables minimales :
+
+- `APP_URL`
+- `APP_SESSION_SECRET`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL=gpt-5.6`
+- `OPENAI_FAST_MODEL=gpt-5.6-luna`
+
+La clé OpenAI a été fournie séparément par le propriétaire. **Utilise-la uniquement depuis `.env.local` et/ou les secrets Vercel. Ne l'affiche, ne la copie dans aucun fichier suivi, log, commit, issue ou snapshot.**
+
+Après déploiement :
+
+```bash
+npm run smoke -- https://<domaine-ubique>
+```
+
+### 6. Branche Google seulement après le build vert
+
+Si les credentials sont disponibles :
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+- `ALLOWED_GOOGLE_EMAIL`
+- `GOOGLE_REFRESH_TOKEN` uniquement pour les tâches background
+- `GOOGLE_SPREADSHEET_ID` si nécessaire
+- `CRON_SECRET`
+
+Valide une fois : OAuth -> lecture/écriture Sheet -> génération -> brouillon Gmail. Ne valide pas l'envoi réel.
+
+### 7. Tavily est secondaire
+
+Si `TAVILY_API_KEY` est déjà disponible, teste une seule offre avec « Rechercher sources & contacts » et vérifie qu'aucun email n'est inventé. Si la clé n'existe pas, ignore Tavily pour cette session : ce n'est pas bloquant.
+
+### 8. Un seul smoke E2E réel
+
+Sur une offre test :
+
+1. création/import ;
+2. snapshot de fiche ;
+3. analyse missions / must-have / nice-to-have / tests recruteur ;
+4. Evidence Engine DIRECT / TRANSFERABLE / ACADEMIC / NOT_DEMONSTRATED ;
+5. LM/email/LinkedIn ;
+6. persistance après reload ;
+7. brouillon Gmail si Google est connecté ;
+8. changement de pipeline ;
+9. aucune invention vérifiée visuellement.
+
+### 9. Termine par un push, pas par un nouveau chantier
+
+```bash
+git status
+git add -A
+git commit -m "feat: finish Ubique V1 integration"
+git push
+```
+
+Si un élément externe manque, mets à jour `docs/ASTRA_HANDOFF.md` avec exactement : **blocage / cause / prochaine action**. Puis arrête-toi.
 
 ## Interdictions
 
 - pas de réécriture globale ;
 - pas de nouvel audit architectural ;
 - pas de redesign non bloquant ;
-- pas de fonctionnalités SaaS/multi-user/billing ;
-- pas de contact discovery sophistiqué tant que le parcours principal n'est pas validé ;
+- pas de nouvelle architecture datastore ;
+- pas de SaaS/multi-user/billing ;
 - pas de scraping LinkedIn fragile ;
 - pas d'envoi automatique de candidature ou d'email ;
-- pas d'invention de données candidat/entreprise ;
-- pas de secret dans Git, logs ou snapshots de tests ;
-- ne refais pas ce qui existe déjà juste parce que tu aurais choisi une autre architecture.
+- pas d'invention de données candidat, entreprise, contact ou email ;
+- pas de secret dans Git ou logs ;
+- pas de refonte d'un module local déjà plus robuste ;
+- pas de fonctionnalités hors P0/P1 tant que Vercel et le parcours E2E ne sont pas validés.
 
 ## Définition de fini
 
 Tu t'arrêtes lorsque :
 
-- tout le travail local est sauvegardé et poussé ;
-- le meilleur du local et du GitHub est réconcilié sans régression ;
+- le travail local est checkpointé et poussé ;
+- les meilleurs éléments local + GitHub sont réconciliés sans régression ;
 - secret scan, TypeScript, tests ciblés et build sont verts ;
-- le site Vercel s'ouvre ;
-- le mode démo fonctionne ;
-- OpenAI fonctionne si la clé est présente ;
-- Google fonctionne si les credentials sont présents, sinon la configuration manquante est explicitement documentée ;
-- le parcours principal de candidature est testable de bout en bout ;
-- les éventuels reliquats sont listés de façon courte et actionnable.
+- un projet Ubique Vercel existe et le site s'ouvre ;
+- le mode démo passe le smoke test ;
+- OpenAI fonctionne via variable d'environnement ;
+- Google fonctionne si les credentials sont disponibles, sinon le seul manque est documenté ;
+- une candidature test passe de bout en bout ;
+- le dernier état est poussé.
 
-Travaille en mode : **inspecter -> comparer -> porter le delta -> tester -> pousser**. Ne me demande pas de validation intermédiaire sauf si une action destructive ou un secret externe absent rend la suite impossible.
+**Mode de travail : checkpoint -> diff -> porter le delta -> une validation -> déployer -> un E2E -> push final.** Ne me demande pas de validation intermédiaire sauf action destructive ou credential externe réellement absent.
