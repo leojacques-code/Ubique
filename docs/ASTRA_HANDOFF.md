@@ -35,16 +35,25 @@ Compléments utiles à comparer/porter si absents du local :
 
 - Next.js/TypeScript shell complet ;
 - `lib/profile.ts` avec source de vérité candidat et garde-fous explicites ;
-- intégration OpenAI Responses via `OPENAI_API_KEY` / `OPENAI_MODEL` ;
-- Google OAuth mono-utilisateur ;
-- cookie de session chiffré AES-256-GCM ;
+- OpenAI Responses avec `OPENAI_MODEL` principal et `OPENAI_FAST_MODEL` pour les tâches de tri/classification, avec sorties bornées ;
+- Google OAuth mono-utilisateur, cookie AES-256-GCM et contrôle propriétaire sur les routes mutantes/coûteuses ;
+- le refresh token Google de fond n'est plus utilisable par une requête publique interactive ;
 - séparation stricte mode démo / vrai Google Sheet ;
+- écriture Sheets qui supprime les lignes obsolètes **après** une écriture réussie ;
 - formulaire d'ajout d'opportunité + validation serveur ;
-- conservation du `jobSnapshot` après préparation ;
-- recherche optionnelle Tavily ;
+- conservation du `jobSnapshot` et du `jobAnalysis` structuré ;
+- affichage de l'offre reconstituée : missions, must-have, nice-to-have, tests recruteur et timing ;
+- recherche cross-platform et contact mapping optionnels via Tavily ;
+- validation stricte des contacts extraits : aucun email déduit, un email `Public vérifié` doit apparaître exactement dans la source ;
+- fusion des contacts trouvés avec les contacts déjà saisis, sans les écraser ;
 - crons Vercel protégés ;
-- recherche d'un contact dans la base globale pour créer un brouillon Gmail ;
-- CI GitHub `npm install -> typecheck -> build`, actuellement verte ;
+- cache des access tokens Google et timeouts réseau ;
+- endpoint `/api/health` ne révélant que des booléens de configuration ;
+- garde-fou contre les URL serveur manifestement locales/privées ;
+- en-têtes de confidentialité `noindex/noarchive`, anti-frame et permissions navigateur restrictives ;
+- `package-lock.json`, installation CI déterministe via `npm ci` ;
+- CI : secret scan -> npm ci -> audit dépendances critiques -> typecheck -> build ;
+- scripts `preflight`, `security:scan`, `verify` et `smoke` ;
 - documentation setup Vercel/Google/OpenAI.
 
 ## 4. Secret OpenAI fourni par le propriétaire
@@ -55,12 +64,21 @@ Utilisation attendue :
 
 - local : `OPENAI_API_KEY` dans `.env.local` uniquement ;
 - Vercel : variable d'environnement chiffrée `OPENAI_API_KEY` pour Preview/Production ;
-- garder `OPENAI_MODEL` configurable ;
+- `OPENAI_MODEL=gpt-5.6` par défaut pour la préparation ;
+- `OPENAI_FAST_MODEL=gpt-5.6-luna` par défaut pour les classifications/enrichissements plus légers ;
 - vérifier uniquement que l'appel Responses fonctionne, sans afficher la clé.
 
-Le code GitHub sait déjà lire `OPENAI_API_KEY` ; il n'est donc pas nécessaire d'ajouter une autre intégration OpenAI si la version locale en possède déjà une équivalente ou meilleure.
+Le code GitHub sait déjà lire ces variables ; il n'est pas nécessaire d'ajouter une autre intégration OpenAI si la version locale en possède déjà une équivalente ou meilleure.
 
-## 5. Travail prioritaire à finir avant expiration de session Astra
+## 5. État Vercel constaté depuis ChatGPT
+
+Équipe Vercel accessible : `LECH` / `lech1`.
+
+Au dernier contrôle, seuls `leo-family-office` et `leo-learning` existent. **Aucun projet Vercel Ubique n'existe encore.**
+
+Le blocage de déploiement est donc opérationnel et non architectural : importer/lier `leojacques-code/Ubique`, puis renseigner les variables d'environnement. Le connecteur disponible dans ChatGPT ne permet pas de créer ce projet ni de pousser des secrets Vercel de manière sûre.
+
+## 6. Travail prioritaire à finir avant expiration de session Astra
 
 ### P0 — sauvegarder le travail local
 
@@ -73,42 +91,43 @@ git add -A
 git commit -m "checkpoint: Astra local Ubique before GitHub reconciliation"
 ```
 
-Si le push fonctionne, pousser immédiatement une branche de sauvegarde. **Ne jamais risquer de perdre le travail local en essayant d'aligner le dépôt.**
+Pousser immédiatement une branche de sauvegarde si possible. **Ne jamais risquer de perdre le travail local en essayant d'aligner le dépôt.**
 
 ### P0 — réconcilier sans réécrire
-
-Comparer :
 
 ```bash
 git fetch origin
 git diff --stat HEAD..origin/build/v1-application-crm
-git diff HEAD..origin/build/v1-application-crm -- docs .github app lib components
+git diff HEAD..origin/build/v1-application-crm -- docs .github app lib components scripts package.json package-lock.json
 ```
 
-Porter uniquement les comportements absents du local. Pour les modules Gmail/documents déjà plus robustes localement, conserver le local.
+Porter uniquement les comportements absents du local. Pour Gmail sync, génération/versioning documentaire et tests déjà plus robustes localement, conserver le local.
 
-### P0 — validation courte
+### P0 — validation courte et unique
 
-Exécuter les commandes déjà disponibles localement. Minimum :
+Après réconciliation seulement :
 
 ```bash
+npm run security:scan
 npm run typecheck
 npm run build
 ```
 
-Puis les tests ciblés existants. Ne lance pas une refonte ou une batterie coûteuse supplémentaire si les tests actuels couvrent déjà les chemins critiques.
+Puis les tests ciblés Astra existants. Évite de relancer l'ensemble à chaque petit changement.
 
-### P0 — obtenir un déploiement Vercel utilisable
+### P0 — déployer Vercel
 
-Objectif : un déploiement Preview/Production qui charge au minimum le cockpit et le mode démo.
+1. créer/importer dans Vercel un projet depuis `leojacques-code/Ubique` ;
+2. utiliser Node 22 ;
+3. faire d'abord passer un déploiement en mode démo ;
+4. configurer `APP_URL` et un `APP_SESSION_SECRET` long ;
+5. ajouter `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_FAST_MODEL` ;
+6. redéployer ;
+7. lancer :
 
-- lier `leojacques-code/Ubique` à un nouveau projet Vercel ;
-- Node 22 ;
-- configurer `APP_URL` ;
-- ajouter `APP_SESSION_SECRET` ;
-- ajouter `OPENAI_API_KEY` ;
-- ne configurer Google/Tavily qu'après que le build Vercel est vert ;
-- vérifier `/`, `/opportunities`, `/pipeline`, une fiche candidature et `/settings`.
+```bash
+npm run smoke -- https://<domaine-ubique>
+```
 
 ### P1 — connexion Google réelle
 
@@ -118,49 +137,65 @@ Configurer ensuite :
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URI`
 - `ALLOWED_GOOGLE_EMAIL`
-- `GOOGLE_REFRESH_TOKEN` uniquement si les crons autonomes sont activés
+- `GOOGLE_REFRESH_TOKEN` uniquement pour les crons autonomes
 - `GOOGLE_SPREADSHEET_ID` si l'auto-création n'est pas retenue
 
-Test minimal : OAuth -> lecture Sheet -> création/modification d'une candidature -> brouillon Gmail. Aucun envoi automatique.
+Test minimal : OAuth -> lecture Sheet -> création/modification d'une candidature -> préparation -> brouillon Gmail. **Aucun envoi automatique.**
 
-### P1 — smoke test OpenAI
+### P1 — recherche/enrichissement
 
-Sur une offre de test :
+Si une clé Tavily est déjà disponible, ajouter `TAVILY_API_KEY` et tester une seule candidature :
 
-1. préparer la candidature ;
-2. vérifier que le mapping distingue DIRECT / TRANSFERABLE / ACADEMIC / NOT_DEMONSTRATED ;
-3. vérifier qu'aucune compétence absente n'est inventée ;
-4. vérifier qu'une LM et un email sont générés ;
-5. vérifier que le snapshot de l'offre est conservé.
+- occurrences cross-platform ;
+- source officielle conservée en priorité ;
+- contacts nommés ;
+- aucun email inventé.
 
-## 6. Ce qui peut attendre après Astra
+Si Tavily n'est pas disponible, ne perds pas de crédits dessus : la préparation depuis une fiche de poste reste fonctionnelle.
 
-Ne dépense pas les dernières heures sur ces sujets si le P0/P1 n'est pas terminé :
+### P1 — test E2E unique
 
-- contact discovery automatique web/LinkedIn ;
-- cross-platform exhaustif et déduplication avancée ATS/job boards ;
-- enrichissement massif des opportunités ;
+Sur une seule offre de test :
+
+1. création/import ;
+2. snapshot de l'offre ;
+3. analyse missions/must-have/nice-to-have/tests recruteur ;
+4. Evidence Engine DIRECT / TRANSFERABLE / ACADEMIC / NOT_DEMONSTRATED ;
+5. LM/email/LinkedIn ;
+6. sauvegarde ;
+7. brouillon Gmail ;
+8. mise à jour du pipeline ;
+9. rechargement de la page pour vérifier la persistance.
+
+## 7. Ce qui peut attendre après Astra
+
+Ne dépense pas les dernières heures dessus tant que P0/P1 n'est pas validé :
+
 - analytics avancés, salaires, conversion par canal, export LFO ;
-- synchronisation Drive/DOCX/PDF sophistiquée si la version locale n'est pas déjà stable ;
+- enrichissement massif de centaines d'opportunités ;
+- recherche LinkedIn plus sophistiquée ou scraping fragile ;
 - polish visuel non bloquant ;
-- multi-user, billing ou architecture SaaS.
+- multi-user, billing ou architecture SaaS ;
+- réécriture des documents/PDF locaux déjà stables ;
+- optimisation prématurée du datastore au-delà des besoins mono-utilisateur.
 
-## 7. Définition de « terminé » pour cette passe
+## 8. Définition de « terminé » pour cette passe
 
-La session Astra doit s'arrêter dès que les points suivants sont vrais :
+La session Astra s'arrête dès que :
 
-- le travail local est sauvegardé dans Git ;
+- le travail local est sauvegardé/poussé ;
 - les meilleurs éléments du local et de `build/v1-application-crm` sont réconciliés sans régression ;
-- TypeScript, tests ciblés et build passent ;
+- secret scan, TypeScript, tests ciblés et build passent ;
 - aucun secret n'est suivi par Git ;
 - un déploiement Vercel s'ouvre ;
 - le mode démo fonctionne ;
-- idéalement OpenAI est branché ;
-- idéalement Google OAuth + Sheet + brouillon Gmail sont validés ;
-- un dernier commit/push documente clairement les éventuels blocages restants.
+- OpenAI fonctionne avec la variable d'environnement ;
+- si les credentials sont disponibles, Google OAuth + Sheet + brouillon Gmail fonctionnent ;
+- le parcours principal d'une candidature est validé de bout en bout ;
+- un dernier commit/push décrit uniquement les éventuels blocages externes restants.
 
-## 8. Règle de consommation de crédits
+## 9. Règle de consommation de crédits
 
-**Inspecter -> comparer -> porter le delta -> tester -> pousser.**
+**Checkpoint -> diff -> porter le delta -> une validation -> déployer -> un smoke E2E -> push final.**
 
-Pas de réécriture globale, pas de nouvel audit architectural, pas de commentaire extensif du code, pas de fonctionnalité hors P0/P1 tant que le déploiement end-to-end n'est pas validé.
+Pas de réécriture globale, pas de nouvel audit architectural, pas de redesign, pas de nouvelle fonctionnalité hors P0/P1 tant que le déploiement end-to-end n'est pas validé.
