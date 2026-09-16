@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getApplication, listContacts, saveApplication } from '@/lib/store';
+import { getApplication, listContacts, saveApplication, saveContacts } from '@/lib/store';
 import { prepareApplication } from '@/lib/engine';
 import { createGmailDraft } from '@/lib/google';
 import { isOwnerRequest } from '@/lib/authz';
+import { enrichApplicationResearch } from '@/lib/enrichment';
 
 export async function POST(req:NextRequest){
   try{
@@ -10,6 +11,17 @@ export async function POST(req:NextRequest){
     const {action,applicationId}=await req.json();
     const app=await getApplication(applicationId);
     if(!app)return NextResponse.json({error:'Candidature introuvable'},{status:404});
+
+    if(action==='enrich'){
+      const result=await enrichApplicationResearch(app);
+      app.sourceUrls=result.sourceUrls;
+      app.contacts=result.contacts;
+      if(result.researchSummary)app.companyResearch=result.researchSummary;
+      app.updatedAt=new Date().toISOString();
+      await saveApplication(app);
+      await saveContacts(result.contacts);
+      return NextResponse.json({message:`Recherche terminée : ${result.sourceUrls.length} source(s), ${result.contacts.length} contact(s) vérifié(s).`,result});
+    }
 
     if(action==='prepare'){
       const result=await prepareApplication(app);
