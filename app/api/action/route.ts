@@ -4,6 +4,14 @@ import { prepareApplication } from '@/lib/engine';
 import { createGmailDraft } from '@/lib/google';
 import { isOwnerRequest } from '@/lib/authz';
 import { enrichApplicationResearch } from '@/lib/enrichment';
+import { Contact } from '@/lib/types';
+
+function mergeContacts(existing:Contact[],incoming:Contact[]){
+  const key=(c:Contact)=>`${c.company}|${c.email||c.linkedin||c.name}|${c.role}`.toLowerCase();
+  const map=new Map(existing.map(c=>[key(c),c]));
+  for(const contact of incoming)map.set(key(contact),{...map.get(key(contact)),...contact});
+  return [...map.values()];
+}
 
 export async function POST(req:NextRequest){
   try{
@@ -14,13 +22,13 @@ export async function POST(req:NextRequest){
 
     if(action==='enrich'){
       const result=await enrichApplicationResearch(app);
-      app.sourceUrls=result.sourceUrls;
-      app.contacts=result.contacts;
+      app.sourceUrls=[...new Set([...(app.sourceUrls||[]),...result.sourceUrls])];
+      app.contacts=mergeContacts(app.contacts||[],result.contacts);
       if(result.researchSummary)app.companyResearch=result.researchSummary;
       app.updatedAt=new Date().toISOString();
       await saveApplication(app);
       await saveContacts(result.contacts);
-      return NextResponse.json({message:`Recherche terminée : ${result.sourceUrls.length} source(s), ${result.contacts.length} contact(s) vérifié(s).`,result});
+      return NextResponse.json({message:`Recherche terminée : ${result.sourceUrls.length} source(s), ${result.contacts.length} nouveau(x) contact(s) vérifié(s).`,result});
     }
 
     if(action==='prepare'){
