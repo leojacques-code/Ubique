@@ -10,9 +10,10 @@ export function ApplicationActions({id, hasEmail}:{id:string;hasEmail:boolean}) 
     const data = await res.json();
     setMessage(res.ok ? (data.message || 'Terminé') : (data.error || 'Erreur'));
     setBusy(null);
-    if (res.ok && action==='prepare') location.reload();
+    if (res.ok && ['enrich','prepare','mark-sent'].includes(action)) setTimeout(()=>location.reload(),350);
   }
   return <div className="action-panel">
+    <button className="button" onClick={()=>run('enrich')} disabled={!!busy}>{busy==='enrich'?'Recherche…':'Rechercher sources & contacts'}</button>
     <button className="button primary" onClick={()=>run('prepare')} disabled={!!busy}>{busy==='prepare'?'Préparation…':'Préparer la candidature'}</button>
     <button className="button" onClick={()=>run('draft')} disabled={!!busy || !hasEmail}>{busy==='draft'?'Création…':'Créer brouillon Gmail'}</button>
     <button className="button" onClick={()=>run('mark-sent')} disabled={!!busy}>Marquer envoyée</button>
