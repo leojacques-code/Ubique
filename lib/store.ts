@@ -53,11 +53,11 @@ async function writeAll(tab: string, rows: Record<string,unknown>[], background 
 }
 
 function parseApplication(row: Record<string,string>): Application {
-  const jsonFields = new Set(['vertical','sourceUrls','gaps','strengths','contacts','evidenceMap']);
+  const jsonFields = new Set(['vertical','sourceUrls','gaps','strengths','contacts','evidenceMap','jobAnalysis']);
   const boolFields = new Set(['coverLetterReady','emailReady','linkedinReady','formReady']);
   const numFields = new Set(['fitScore','salaryMin','salaryMax']);
   const out:any = {...row};
-  for (const k of jsonFields) if (row[k]) { try { out[k]=JSON.parse(row[k]); } catch { out[k]=[]; } }
+  for (const k of jsonFields) if (row[k]) { try { out[k]=JSON.parse(row[k]); } catch { out[k]=k==='jobAnalysis'?undefined:[]; } }
   for (const k of boolFields) out[k] = row[k] === 'true';
   for (const k of numFields) if (row[k]) out[k] = Number(row[k]);
   return out as Application;
