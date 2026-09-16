@@ -28,6 +28,7 @@ export async function getGoogleAccessToken(background = false): Promise<string |
     const session = await getSession();
     if (session?.accessToken && session.expiresAt > Date.now() + 60_000) return session.accessToken;
     if (session?.refreshToken) return refreshAccessToken(session.refreshToken);
+    return null;
   }
   if (process.env.GOOGLE_REFRESH_TOKEN) return refreshAccessToken(process.env.GOOGLE_REFRESH_TOKEN);
   return null;
