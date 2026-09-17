@@ -22,6 +22,7 @@ import { parseCsv } from "../lib/client-utils";
 import { renderPdf } from "../lib/services/documentService";
 import { extractPdfText } from "../lib/services/pdfTextService";
 import { PDFDocument, StandardFonts } from "pdf-lib";
+
 test("encrypted session authenticates content; tampering rejected", () => {
   process.env.TOKEN_ENCRYPTION_KEY = "ab".repeat(32);
   const sealed = encrypt({ refreshToken: "test-private" });
@@ -35,6 +36,7 @@ test("encrypted session authenticates content; tampering rejected", () => {
   assert(!sealed.includes("test-private"));
   assert.equal(equal("a", "aa"), false);
 });
+
 test("append-only replay preserves concurrent field patches and deduplicates events", () => {
   const rows = [
     ["e1", "a", "", "create", '{"status":"Inbox","notes":"original"}'],
@@ -45,6 +47,7 @@ test("append-only replay preserves concurrent field patches and deduplicates eve
   const result = fold(rows);
   assert.deepEqual(result, [{ id: "a", status: "Envoyée", notes: "edited" }]);
 });
+
 test("dedup does not merge internship and CDI", () => {
   const base = {
     company: "Atlas",
@@ -58,6 +61,7 @@ test("dedup does not merge internship and CDI", () => {
     fingerprint({ ...base, contractType: "Stage" }),
   );
 });
+
 test("confidence, terminal status and process progress gate automated transitions", () => {
   const app = demoSnapshot().applications[2];
   assert.equal(mayAutoApply(app, "INTERVIEW_INVITE", 0.7, 0.92), false);
@@ -81,6 +85,7 @@ test("confidence, terminal status and process progress gate automated transition
   );
   assert.equal(mayAutoApply(app, "JOB_ALERT", 1, 0.92), false);
 });
+
 test("invented evidence and unsupported claims are blocked", () => {
   assert.throws(() =>
     validateEvidence(
@@ -93,22 +98,26 @@ test("invented evidence and unsupported claims are blocked", () => {
   );
   assert.doesNotThrow(() =>
     validateEvidence(
-      [{ type: "NOT_DEMONSTRATED", evidenceIds: [] }], defaultProfile,
+      [{ type: "NOT_DEMONSTRATED", evidenceIds: [] }],
+      defaultProfile,
     ),
   );
 });
+
 test("business-day follow-up and untrusted links", () => {
   assert.equal(businessDate("2026-09-18T10:00:00Z", 5), "2026-09-25");
   assert.equal(safeUrl("javascript:alert(1)"), "");
   assert.equal(safeUrl("http://foo.com"), "");
   assert(!gmailTerm('Atlas" OR {test}\n').includes("\n"));
 });
+
 test("CSV keeps quoted commas and multiline job descriptions", () => {
   const rows = parseCsv(
     'company,jobTitle,description\nAtlas,Analyst,"Hello, world\nSecond line"',
   );
   assert.equal(rows[0].description, "Hello, world\nSecond line");
 });
+
 test("Google API routing uses the dedicated Sheets host", () => {
   assert.equal(
     googleEndpoint("sheets/v4/spreadsheets"),
@@ -119,6 +128,7 @@ test("Google API routing uses the dedicated Sheets host", () => {
     "https://www.googleapis.com/drive/v3/files",
   );
 });
+
 test("server PDF extraction works without browser DOM globals", async () => {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
@@ -132,7 +142,8 @@ test("server PDF extraction works without browser DOM globals", async () => {
   const text = await extractPdfText(await pdf.save());
   assert.match(text, /Ubique PDF profile import/);
 });
-test("free AI defaults to strict OpenRouter structured output routing", () => {
+
+test("free AI uses portable OpenRouter routing and validates JSON locally", () => {
   const target = resolveAiTarget(false, {
     OPENROUTER_API_KEY: "test-key",
     APP_URL: "https://ubique.example",
@@ -144,7 +155,6 @@ test("free AI defaults to strict OpenRouter structured output routing", () => {
   );
   assert.equal(target.model, "openrouter/free");
   assert.equal(target.providerRouting?.data_collection, "deny");
-  assert.equal(target.providerRouting?.require_parameters, true);
   assert.equal(target.providerRouting?.zdr, undefined);
   assert.equal(target.headers["X-Title"], "Ubique");
 
@@ -157,29 +167,25 @@ test("free AI defaults to strict OpenRouter structured output routing", () => {
     2500,
     target.providerRouting,
   ) as {
-    response_format: {
-      type: string;
-      json_schema: { name: string; strict: boolean; schema: unknown };
-    };
-    reasoning: { enabled: boolean };
     max_tokens: number;
-    messages: Array<{ role: string }>;
-    provider: { data_collection: string; require_parameters: boolean };
+    messages: Array<{ role: string; content: string }>;
+    provider: { data_collection: string; zdr?: boolean };
+    response_format?: unknown;
+    reasoning?: unknown;
     instructions?: unknown;
     max_output_tokens?: unknown;
   };
-  assert.equal(body.response_format.type, "json_schema");
-  assert.equal(body.response_format.json_schema.name, "ubique_result");
-  assert.equal(body.response_format.json_schema.strict, true);
-  assert.equal(body.reasoning.enabled, false);
   assert.equal(body.max_tokens, 2500);
   assert.equal(body.messages[0].role, "system");
   assert.equal(body.messages[1].role, "user");
+  assert.match(body.messages[0].content, /Retourne exclusivement un objet JSON valide/);
   assert.equal(body.provider.data_collection, "deny");
-  assert.equal(body.provider.require_parameters, true);
+  assert.equal("response_format" in body, false);
+  assert.equal("reasoning" in body, false);
   assert.equal("instructions" in body, false);
   assert.equal("max_output_tokens" in body, false);
 });
+
 test("free OpenRouter gets a longer timeout and one retry", () => {
   assert.deepEqual(aiTransportPolicy("openrouter"), {
     attempts: 2,
@@ -190,6 +196,7 @@ test("free OpenRouter gets a longer timeout and one retry", () => {
     timeoutMs: 90000,
   });
 });
+
 test("AI provider can explicitly switch back to OpenAI", () => {
   const target = resolveAiTarget(true, {
     AI_PROVIDER: "openai",
@@ -200,6 +207,7 @@ test("AI provider can explicitly switch back to OpenAI", () => {
   assert.equal(target.model, "gpt-5.6-luna");
   assert.equal(target.providerRouting, undefined);
 });
+
 test("letter export really is one A4 page; overflow blocked", async () => {
   const pdf = await PDFDocument.load(
     await renderPdf(
