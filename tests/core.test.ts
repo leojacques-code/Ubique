@@ -93,8 +93,7 @@ test("invented evidence and unsupported claims are blocked", () => {
   );
   assert.doesNotThrow(() =>
     validateEvidence(
-      [{ type: "NOT_DEMONSTRATED", evidenceIds: [] }],
-      defaultProfile,
+      [{ type: "NOT_DEMONSTRATED", evidenceIds: [] }], defaultProfile,
     ),
   );
 });
@@ -133,7 +132,7 @@ test("server PDF extraction works without browser DOM globals", async () => {
   const text = await extractPdfText(await pdf.save());
   assert.match(text, /Ubique PDF profile import/);
 });
-test("free AI defaults to OpenRouter chat completions with privacy-conscious routing", () => {
+test("free AI defaults to strict OpenRouter structured output routing", () => {
   const target = resolveAiTarget(false, {
     OPENROUTER_API_KEY: "test-key",
     APP_URL: "https://ubique.example",
@@ -145,6 +144,7 @@ test("free AI defaults to OpenRouter chat completions with privacy-conscious rou
   );
   assert.equal(target.model, "openrouter/free");
   assert.equal(target.providerRouting?.data_collection, "deny");
+  assert.equal(target.providerRouting?.require_parameters, true);
   assert.equal(target.providerRouting?.zdr, undefined);
   assert.equal(target.headers["X-Title"], "Ubique");
 
@@ -157,18 +157,26 @@ test("free AI defaults to OpenRouter chat completions with privacy-conscious rou
     2500,
     target.providerRouting,
   ) as {
-    response_format: { type: string };
+    response_format: {
+      type: string;
+      json_schema: { name: string; strict: boolean; schema: unknown };
+    };
+    reasoning: { enabled: boolean };
     max_tokens: number;
     messages: Array<{ role: string }>;
-    provider: { data_collection: string };
+    provider: { data_collection: string; require_parameters: boolean };
     instructions?: unknown;
     max_output_tokens?: unknown;
   };
-  assert.equal(body.response_format.type, "json_object");
+  assert.equal(body.response_format.type, "json_schema");
+  assert.equal(body.response_format.json_schema.name, "ubique_result");
+  assert.equal(body.response_format.json_schema.strict, true);
+  assert.equal(body.reasoning.enabled, false);
   assert.equal(body.max_tokens, 2500);
   assert.equal(body.messages[0].role, "system");
   assert.equal(body.messages[1].role, "user");
   assert.equal(body.provider.data_collection, "deny");
+  assert.equal(body.provider.require_parameters, true);
   assert.equal("instructions" in body, false);
   assert.equal("max_output_tokens" in body, false);
 });
