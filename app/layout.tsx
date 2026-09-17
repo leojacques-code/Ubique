@@ -1,4 +1,14 @@
-import './globals.css';
-import { Shell } from '@/components/Shell';
-export const metadata = { title:'Ubique — Application CRM', description:'Cockpit personnel de candidatures finance' };
-export default function RootLayout({children}:{children:React.ReactNode}) { return <html lang="fr"><body><Shell>{children}</Shell></body></html>; }
+import type { Metadata } from "next";
+import "./globals.css";
+export const metadata: Metadata = {
+  title: "Application CRM",
+  description: "Cockpit personnel de candidature en finance",
+  robots: { index: false, follow: false },
+};
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="fr">
+      <body>{children}</body>
+    </html>
+  );
+}

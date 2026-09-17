@@ -1,116 +1,225 @@
-export const APPLICATION_STATUSES = [
-  'Inbox','À analyser','À préparer','Prête à envoyer','Envoyée','Relance','En process','Offre','Refus','Clôturée'
+export const statuses = [
+  "Inbox",
+  "À analyser",
+  "À préparer",
+  "Prête à envoyer",
+  "Envoyée",
+  "Relance",
+  "En process",
+  "Offre",
+  "Refus",
+  "Clôturée",
 ] as const;
-export type ApplicationStatus = typeof APPLICATION_STATUSES[number];
-
-export const APPLICATION_STAGES = ['Candidature','Test / Case','Entretien 1','Entretien 2','Entretien final','Références','Décision','Offre'] as const;
-export type ApplicationStage = typeof APPLICATION_STAGES[number];
-
-export type Priority = 'A' | 'B' | 'C';
-export type EvidenceType = 'DIRECT' | 'TRANSFERABLE' | 'ACADEMIC' | 'NOT_DEMONSTRATED';
-
-export interface EvidenceItem {
-  requirement: string;
-  evidence: string;
+export type Status = (typeof statuses)[number];
+export const verticals = [
+  "Private Equity",
+  "Public Markets",
+  "Private Credit",
+  "M&A",
+  "Corporate Development",
+  "Transaction Services",
+  "Asset Management",
+] as const;
+export const stages = [
+  "Candidature",
+  "Test / Case",
+  "Entretien 1",
+  "Entretien 2",
+  "Entretien final",
+  "Références",
+  "Décision",
+  "Offre",
+] as const;
+export type Entity = { id: string; createdAt: string; updatedAt: string };
+export type Source = {
+  url: string;
+  title: string;
+  content: string;
+  checkedAt: string;
+  isOfficial?: boolean;
+};
+export type Evidence = {
+  id: string;
+  category: string;
+  fact: string;
   source: string;
-  evidenceType: EvidenceType;
-  confidence: number;
-}
-
-export interface JobAnalysis {
+  type: "DIRECT" | "TRANSFERABLE" | "ACADEMIC" | "NOT_DEMONSTRATED";
+};
+export type Matching = {
+  requirement: string;
+  evidenceIds: string[];
+  type: Evidence["type"];
+  explanation: string;
+};
+export type Analysis = {
+  summary: string;
   missions: string[];
   mustHave: string[];
   niceToHave: string[];
   recruiterTests: string[];
-  vertical?: string[];
-  timingIssues?: string[];
-}
-
-export interface Application {
-  id: string;
+  matches: Matching[];
+  strengths: string[];
+  gaps: string[];
+  forbiddenClaims: string[];
+  cvLanguage: "FR" | "EN";
+  fitScore: number;
+  fitDetails: { dimension: string; score: number; reason: string }[];
+  strategy: string;
+  companyFacts: { fact: string; sourceUrl: string }[];
+};
+export type Application = Entity & {
   company: string;
   jobTitle: string;
-  reference?: string;
-  location?: string;
-  contractType?: string;
-  vertical: string[];
-  priority: Priority;
-  careerPriority?: Priority;
-  status: ApplicationStatus;
-  stage: ApplicationStage;
-  fitScore?: number;
-  officialUrl?: string;
-  sourceUrls?: string[];
-  publicationDate?: string;
-  startDate?: string;
-  deadline?: string;
-  applicationDate?: string;
-  lastInteraction?: string;
-  nextAction?: string;
-  nextActionDate?: string;
-  channel?: string;
+  location: string;
+  contractType: string;
+  startDate: string;
+  reference: string;
+  vertical: string;
+  priority: "A" | "B" | "C";
+  careerPriority: string;
+  status: Status;
+  stage: string;
+  officialUrl: string;
+  description: string;
+  publicationDate: string;
+  deadline: string;
+  nextAction: string;
+  nextActionDate: string;
+  applicationDate: string;
+  lastInteraction: string;
+  notes: string;
+  isWatch: boolean;
+  ignored: boolean;
+  analysis?: Analysis;
+  sources: Source[];
+  gmailCheckedAt?: string;
+  gmailHistory?: Mail[];
   cvVersion?: string;
-  coverLetterReady?: boolean;
-  emailReady?: boolean;
-  linkedinReady?: boolean;
-  formReady?: boolean;
-  gaps?: string[];
-  strengths?: string[];
-  contacts?: Contact[];
-  coverLetter?: string;
-  applicationEmail?: string;
-  linkedinMessage?: string;
-  jobSnapshot?: string;
-  jobAnalysis?: JobAnalysis;
-  companyResearch?: string;
-  evidenceMap?: EvidenceItem[];
-  createdAt: string;
-  updatedAt: string;
-  salaryMin?: number;
-  salaryMax?: number;
-  salaryCurrency?: string;
-}
-
-export interface Contact {
-  id: string;
+  preparedAt?: string;
+};
+export type Contact = Entity & {
+  applicationId: string;
   company: string;
   name: string;
   role: string;
-  type: 'Recruteur'|'RH / Talent'|'Manager'|'Analyst / Associate'|'Alumni'|'Autre';
-  linkedin?: string;
-  email?: string;
-  emailStatus: 'Public vérifié'|'Probable'|'Non trouvé';
-  alumniSkema?: boolean;
-  source?: string;
-  relevance?: 'Principale'|'Secondaire'|'Réseau';
-  lastContact?: string;
-  notes?: string;
-}
-
-export interface Interaction {
-  id: string;
+  type: string;
+  email: string;
+  emailStatus: "VERIFIED_PUBLIC" | "PROBABLE_PATTERN" | "NOT_FOUND";
+  linkedin: string;
+  source: string;
+  alumniSkema: boolean;
+  relevance: string;
+  primary: boolean;
+};
+export type Document = Entity & {
   applicationId: string;
   type: string;
-  date: string;
-  channel: string;
-  contactId?: string;
+  filename: string;
+  text: string;
+  version: number;
+  driveFileId?: string;
+  driveUrl?: string;
+  usedForApplication: boolean;
+  quality: string;
+  cvLanguage?: string;
+  mimeType?: string;
+};
+export type Interaction = Entity & {
+  applicationId: string;
+  type: string;
+  summary: string;
   gmailMessageId?: string;
-  subject?: string;
-  summary?: string;
-  aiClassification?: string;
+  threadId?: string;
+  classification?: string;
   confidence?: number;
-}
-
-export interface PreparationResult {
-  jobSnapshot: string;
-  jobAnalysis: JobAnalysis;
-  evidenceMap: EvidenceItem[];
-  strengths: string[];
-  gaps: string[];
-  companyResearch: string;
-  recommendedCv: string;
-  coverLetter: string;
-  applicationEmail: string;
-  linkedinMessage: string;
-  nextAction: string;
-}
+  oldStatus?: string;
+  newStatus?: string;
+  requiresReview?: boolean;
+  completed?: boolean;
+  proposedPatch?: Partial<Application>;
+  suggestion?: string;
+};
+export type Mail = {
+  id: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  date: string;
+  text: string;
+  labels: string[];
+};
+export type Profile = Entity & {
+  name: string;
+  availability: string;
+  location: string;
+  convention: "UNKNOWN" | "AVAILABLE" | "NOT_AVAILABLE";
+  evidence: Evidence[];
+  writingRules: string;
+  instructions: string;
+};
+export type Settings = Entity & {
+  preferredLocations: string;
+  keywords: string;
+  negativeKeywords: string;
+  excludedCompanies: string;
+  gmailLabels: boolean;
+  autoStatus: boolean;
+  threshold: number;
+  watchQueries: string[];
+  lastGmailSync?: string;
+  gmailPageToken?: string;
+  gmailWindowAfter?: number;
+  gmailWindowStarted?: string;
+};
+export type SyncLog = Entity & {
+  type: string;
+  status: string;
+  itemsProcessed: number;
+  errors: string[];
+};
+export type Snapshot = {
+  applications: Application[];
+  contacts: Contact[];
+  documents: Document[];
+  interactions: Interaction[];
+  profile: Profile;
+  settings: Settings;
+  logs: SyncLog[];
+  connections: Record<string, boolean>;
+  email: string;
+  demo: boolean;
+};
+export const defaultProfile: Profile = {
+  id: "profile",
+  name: "",
+  availability: "2027-01",
+  location: "Paris",
+  convention: "UNKNOWN",
+  evidence: [],
+  writingRules:
+    "Sobre, précis, factuel, phrases courtes. Vouvoiement. Aucun superlatif ni flatterie. Pas de tiret cadratin. Disponibilité janvier 2027. Anglais naturel si offre anglophone.",
+  instructions:
+    "CV prioritaire sur les instructions en cas de conflit. Classifications DIRECT, TRANSFERABLE, ACADEMIC, NOT_DEMONSTRATED. Aucun fait inventé.",
+  createdAt: "",
+  updatedAt: "",
+};
+export const defaultSettings: Settings = {
+  id: "settings",
+  preferredLocations: "Paris",
+  keywords:
+    "private equity, investment analyst, private credit, M&A, equity research",
+  negativeKeywords: "senior, director, retail banking",
+  excludedCompanies: "",
+  gmailLabels: false,
+  autoStatus: true,
+  threshold: 0.92,
+  watchQueries: [
+    "Private Equity analyst Paris January 2027 careers",
+    "Public equities investment analyst junior Paris careers",
+    "Private Credit analyst Paris January 2027 careers",
+    "M&A analyst CDI Paris careers",
+    "Investment analyst intern Paris January 2027 site:myworkdayjobs.com",
+  ],
+  createdAt: "",
+  updatedAt: "",
+};
