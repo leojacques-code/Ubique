@@ -10,14 +10,24 @@ type ProviderRouting = {
   zdr?: boolean;
 };
 
+const RESULT_TOOL = "submit_ubique_result";
+
+export const OPENROUTER_FREE_MODELS = [
+  "inclusionai/ling-3.0-flash-fin:free",
+  "inclusionai/ling-3.0-flash:free",
+  "inclusionai/ling-3.0-flash-vl:free",
+  "openrouter/free",
+] as const;
+
+export function openRouterModelCandidates(model: string) {
+  if (model === "openrouter/free") return [...OPENROUTER_FREE_MODELS];
+  return [model, model];
+}
+
 export function aiTransportPolicy(provider: Provider) {
   return provider === "openrouter"
     ? { attempts: 2, timeoutMs: 120000 }
     : { attempts: 1, timeoutMs: 90000 };
-}
-
-function retryableStatus(status: number) {
-  return [408, 429, 500, 502, 503, 504].includes(status);
 }
 
 function isTimeout(error: unknown) {
@@ -44,6 +54,13 @@ function jsonPrompt<T>(instruction: string, schema: z.ZodType<T>) {
   );
 }
 
+function usesForcedToolResult(provider: Provider, model: string) {
+  return (
+    provider === "openrouter" &&
+    (model === "openrouter/free" || model.endsWith(":free"))
+  );
+}
+
 export function aiRequestBody<T>(
   provider: Provider,
   model: string,
@@ -63,6 +80,23 @@ export function aiRequestBody<T>(
       ],
       max_tokens: maxOutputTokens,
     };
+    if (usesForcedToolResult(provider, model)) {
+      body.tools = [
+        {
+          type: "function",
+          function: {
+            name: RESULT_TOOL,
+            description:
+              "Return the final Ubique result exactly matching the requested JSON schema.",
+            parameters: z.toJSONSchema(schema),
+          },
+        },
+      ];
+      body.tool_choice = {
+        type: "function",
+        function: { name: RESULT_TOOL },
+      };
+    }
     if (providerRouting) body.provider = providerRouting;
     return body;
   }
@@ -77,7 +111,7 @@ export function aiRequestBody<T>(
   };
 }
 
-function extractContent(provider: Provider, result: unknown) {
+export function extractAiPayload(provider: Provider, result: unknown) {
   const root = asRecord(result);
   if (!root) return "";
 
@@ -86,6 +120,17 @@ function extractContent(provider: Provider, result: unknown) {
     if (!Array.isArray(choices) || choices.length === 0) return "";
     const first = asRecord(choices[0]);
     const message = asRecord(first?.message);
+    const toolCalls = message?.tool_calls;
+    if (Array.isArray(toolCalls)) {
+      for (const call of toolCalls) {
+        const fn = asRecord(asRecord(call)?.function);
+        if (fn?.name !== RESULT_TOOL) continue;
+        const args = fn.arguments;
+        if (typeof args === "string" && args.trim()) return args;
+        if (args !== undefined) return JSON.stringify(args);
+      }
+    }
+
     const content = message?.content;
     if (typeof content === "string") return content;
     if (!Array.isArray(content)) return "";
@@ -177,20 +222,26 @@ export async function ai<T>(
     );
 
   const maxOutputTokens = Math.min(options.maxOutputTokens ?? 6000, 8000);
-  const body = aiRequestBody(
-    target.provider,
-    target.model,
-    instruction,
-    input,
-    schema,
-    maxOutputTokens,
-    target.providerRouting,
-  );
-
   const policy = aiTransportPolicy(target.provider);
+  const models =
+    target.provider === "openrouter"
+      ? openRouterModelCandidates(target.model)
+      : [target.model];
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    const hasNext = index < models.length - 1;
+    const body = aiRequestBody(
+      target.provider,
+      model,
+      instruction,
+      input,
+      schema,
+      maxOutputTokens,
+      target.providerRouting,
+    );
+
     let res: Response;
     try {
       res = await fetch(target.endpoint, {
@@ -205,17 +256,11 @@ export async function ai<T>(
       });
     } catch (error) {
       lastError = error;
-      if (
-        target.provider === "openrouter" &&
-        attempt < policy.attempts &&
-        isTimeout(error)
-      ) {
-        continue;
-      }
+      if (target.provider === "openrouter" && hasNext) continue;
       if (isTimeout(error)) {
         throw new Error(
           target.provider === "openrouter"
-            ? "OpenRouter gratuit a dépassé le délai de réponse après deux tentatives. Réessayez dans quelques instants."
+            ? "Les modèles gratuits OpenRouter ont dépassé le délai de réponse. Réessayez dans quelques instants."
             : "Le fournisseur IA a dépassé le délai de réponse. Réessayez dans quelques instants.",
         );
       }
@@ -223,16 +268,18 @@ export async function ai<T>(
     }
 
     if (!res.ok) {
+      const label = target.provider === "openrouter" ? "OpenRouter" : "OpenAI";
+      lastError = new Error(await apiErrorMessage(res, label));
       if (
         target.provider === "openrouter" &&
-        attempt < policy.attempts &&
-        retryableStatus(res.status)
+        hasNext &&
+        res.status !== 401 &&
+        res.status !== 403
       ) {
-        await new Promise((resolve) => setTimeout(resolve, 750));
+        await new Promise((resolve) => setTimeout(resolve, 250));
         continue;
       }
-      const label = target.provider === "openrouter" ? "OpenRouter" : "OpenAI";
-      throw new Error(await apiErrorMessage(res, label));
+      throw lastError;
     }
 
     const result = await res.json();
@@ -245,16 +292,16 @@ export async function ai<T>(
       }
     }
 
-    const content = extractContent(target.provider, result);
+    const content = extractAiPayload(target.provider, result);
     if (!content.trim()) {
       lastError = new Error("Réponse vide");
-      if (target.provider === "openrouter" && attempt < policy.attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 750));
+      if (target.provider === "openrouter" && hasNext) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
         continue;
       }
       throw new Error(
         target.provider === "openrouter"
-          ? "OpenRouter gratuit a renvoyé deux réponses vides. Réessayez dans quelques instants."
+          ? "Aucun modèle gratuit OpenRouter n’a renvoyé de résultat exploitable. Réessayez dans quelques instants."
           : "Le fournisseur IA n’a renvoyé aucun contenu exploitable.",
       );
     }
@@ -263,13 +310,13 @@ export async function ai<T>(
       return parseValidated(content, schema);
     } catch (error) {
       lastError = error;
-      if (target.provider === "openrouter" && attempt < policy.attempts) {
-        await new Promise((resolve) => setTimeout(resolve, 750));
+      if (target.provider === "openrouter" && hasNext) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
         continue;
       }
       throw new Error(
         target.provider === "openrouter"
-          ? "Le modèle gratuit a répondu, mais pas dans un JSON valide. Réessayez dans quelques instants."
+          ? "Les modèles gratuits ont répondu, mais aucun résultat ne respecte le format attendu. Réessayez dans quelques instants."
           : "La réponse IA ne respecte pas le format attendu.",
       );
     }
