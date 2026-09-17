@@ -18,7 +18,8 @@ import { demoSnapshot } from "../lib/demo";
 import { defaultProfile } from "../lib/types";
 import { parseCsv } from "../lib/client-utils";
 import { renderPdf } from "../lib/services/documentService";
-import { PDFDocument } from "pdf-lib";
+import { extractPdfText } from "../lib/services/pdfTextService";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 test("encrypted session authenticates content; tampering rejected", () => {
   process.env.TOKEN_ENCRYPTION_KEY = "ab".repeat(32);
   const sealed = encrypt({ refreshToken: "test-private" });
@@ -116,6 +117,19 @@ test("Google API routing uses the dedicated Sheets host", () => {
     googleEndpoint("drive/v3/files"),
     "https://www.googleapis.com/drive/v3/files",
   );
+});
+test("server PDF extraction works without browser DOM globals", async () => {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  page.drawText("Ubique PDF profile import", {
+    x: 72,
+    y: 760,
+    size: 12,
+    font,
+  });
+  const text = await extractPdfText(await pdf.save());
+  assert.match(text, /Ubique PDF profile import/);
 });
 test("free AI defaults to OpenRouter with privacy-conscious routing", () => {
   const target = resolveAiTarget(false, {
