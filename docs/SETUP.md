@@ -36,21 +36,49 @@ Renseigner `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `A
 
 En production, `ALLOWED_GOOGLE_EMAIL` est obligatoire afin que seule l’adresse propriétaire puisse ouvrir une session exploitable.
 
-Scopes demandés : identité, Gmail modify/compose, Drive file, Sheets. Ubique ne supprime jamais un email et ne l’envoie jamais automatiquement.
+Scopes demandés : identité, Gmail readonly/compose, Drive file, Sheets. Le scope Gmail modify n’est demandé que pour les parcours qui nécessitent les labels. Ubique ne supprime jamais un email et ne l’envoie jamais automatiquement.
 
 ### Cron autonome
 
-Les crons Vercel n’ont pas de session navigateur. Pour les activer, générer une fois un refresh token Google avec consentement offline puis le placer dans `GOOGLE_REFRESH_TOKEN`. Ne jamais le committer.
+Les crons Vercel n’ont pas de session navigateur. Pour les activer, générer une fois un refresh token Google avec consentement offline via `npm run google:connect`, puis placer `GOOGLE_REFRESH_TOKEN_ENCRYPTED` dans Vercel. `GOOGLE_REFRESH_TOKEN` reste accepté pour compatibilité. Ne jamais committer ces valeurs.
 
-## 3. OpenAI
+## 3. IA — gratuit recommandé avec OpenRouter
 
-Renseigner les secrets/variables d’environnement :
+Ubique supporte deux fournisseurs : **OpenRouter** et **OpenAI**. Il n’existe aucun fallback payant automatique : le fournisseur actif est déterminé par `AI_PROVIDER`, ou automatiquement par la présence d’une clé OpenRouter puis OpenAI.
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL=gpt-5.6` pour la préparation principale
-- `OPENAI_FAST_MODEL=gpt-5.6-luna` pour les tâches de classification/recherche à plus faible coût
+### Option recommandée : OpenRouter gratuit
 
-Le projet utilise la Responses API via le SDK officiel `openai`. Les sorties sont bornées par type de tâche pour limiter les appels anormalement coûteux. Les clés doivent rester dans `.env.local` ou dans les variables chiffrées du provider de déploiement, jamais dans Git.
+```env
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openrouter/free
+OPENROUTER_FAST_MODEL=openrouter/free
+OPENROUTER_DATA_COLLECTION=deny
+OPENROUTER_ZDR=false
+```
+
+`openrouter/free` laisse OpenRouter sélectionner un modèle gratuit compatible avec la requête. Les sorties structurées JSON utilisées par Ubique restent demandées par l’application.
+
+Par défaut, Ubique envoie `provider.data_collection=deny` afin d’exclure les endpoints signalés comme collectant les données de façon non transitoire / pour entraînement. `OPENROUTER_ZDR=true` force en plus Zero Data Retention, mais peut réduire la disponibilité des endpoints gratuits ; il est donc optionnel.
+
+Les en-têtes `HTTP-Referer` (si `APP_URL` existe) et `X-Title: Ubique` sont ajoutés pour OpenRouter. Les clés restent exclusivement côté serveur.
+
+### Alternative OpenAI
+
+Pour utiliser OpenAI à la place :
+
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6
+OPENAI_FAST_MODEL=gpt-5.6-luna
+```
+
+Les anciennes variables OpenAI restent compatibles. Les clés doivent rester dans `.env.local` ou dans les variables chiffrées du provider de déploiement, jamais dans Git.
+
+### Variables génériques / avancées
+
+`AI_MODEL`, `AI_FAST_MODEL` et `AI_BASE_URL` peuvent surcharger les valeurs génériques. `OPENROUTER_BASE_URL` et `OPENAI_BASE_URL` permettent une surcharge spécifique au fournisseur. Pour le déploiement normal, ne pas les renseigner.
 
 ## 4. Recherche web optionnelle
 
@@ -89,7 +117,7 @@ npm run smoke -- https://<domaine-ubique>
 
 Le smoke test vérifie `/api/health`, `/`, `/opportunities`, `/pipeline` et `/settings` sans écrire de donnée.
 
-`/api/health` expose uniquement des booléens de configuration et le hash court du commit Vercel, jamais la valeur d’un secret.
+`/api/health` expose uniquement des booléens de configuration et le hash court du commit Vercel, jamais la valeur d’un secret. `config.ai` indique si le fournisseur actif est prêt ; `config.openrouter` et `config.openai` indiquent seulement la présence de leurs clés respectives.
 
 ## 7. Règles métier
 
@@ -107,12 +135,12 @@ Le smoke test vérifie `/api/health`, `/`, `/opportunities`, `/pipeline` et `/se
 - Le serveur refuse les URL de recherche manifestement locales/privées afin de réduire le risque SSRF.
 - Le cookie OAuth est HttpOnly et chiffré AES-256-GCM avec `APP_SESSION_SECRET`.
 - Ne jamais coller une clé API dans une issue, une PR, un log ou un snapshot de test.
+- Avec OpenRouter, conserver `OPENROUTER_DATA_COLLECTION=deny` pour les données candidat. Activer `OPENROUTER_ZDR=true` seulement si la disponibilité observée reste suffisante.
 
 ## 9. Limites de cette branche GitHub
 
 - Pas de scraping agressif LinkedIn.
 - Pas de soumission automatique ATS.
 - Pas de multi-user ni billing.
-- La branche GitHub fournit la base documentaire en texte ; si le workspace local Astra possède déjà une version plus avancée de génération/versioning PDF/DOCX ou de Gmail sync, **conserver la version locale plus robuste lors de la réconciliation**.
 
 Voir aussi `docs/ASTRA_HANDOFF.md` et `docs/ASTRA_FINISH_PROMPT.md` avant toute reprise Astra.
