@@ -3,12 +3,15 @@ import {
   sessionConfigured,
   backgroundConfigured,
 } from "@/lib/config";
+import { aiConfigured } from "@/lib/services/aiConfig";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const config = {
+    ai: aiConfigured(),
+    openrouter: !!process.env.OPENROUTER_API_KEY,
     openai: !!process.env.OPENAI_API_KEY,
     googleOAuth: oauthConfigured(),
     googleBackground: backgroundConfigured(),
@@ -19,7 +22,7 @@ export async function GET() {
     appUrl: !!process.env.APP_URL,
   };
   const productionReady =
-    config.openai &&
+    config.ai &&
     config.googleOAuth &&
     config.sessionSecret &&
     config.appUrl;

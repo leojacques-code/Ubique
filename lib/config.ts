@@ -1,3 +1,5 @@
+import { aiConfigured } from "@/lib/services/aiConfig";
+
 export const ownerEmail = () =>
   process.env.ALLOWED_GOOGLE_EMAIL || process.env.ALLOWED_EMAIL || "";
 export const sessionConfigured = () =>
@@ -32,7 +34,7 @@ export const configurationStatus = (): Record<string, boolean> => ({
   "URL du site et retour OAuth": !!(
     process.env.APP_URL && process.env.GOOGLE_REDIRECT_URI
   ),
-  OpenAI: !!process.env.OPENAI_API_KEY,
+  "IA (OpenRouter / OpenAI)": aiConfigured(),
   "Google Sheets": !!process.env.GOOGLE_SPREADSHEET_ID,
   "Synchronisation en arrière-plan": backgroundConfigured(),
   "Recherche web (facultative)": !!process.env.TAVILY_API_KEY,

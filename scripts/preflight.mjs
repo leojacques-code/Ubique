@@ -1,6 +1,5 @@
 const groups = [
   ["Core production", ["APP_URL", "APP_SESSION_SECRET"]],
-  ["OpenAI", ["OPENAI_API_KEY", "OPENAI_MODEL"]],
   [
     "Google interactive",
     [
@@ -10,10 +9,25 @@ const groups = [
       "ALLOWED_GOOGLE_EMAIL",
     ],
   ],
-  ["Google background", ["GOOGLE_REFRESH_TOKEN", "CRON_SECRET"]],
+  ["Google background", ["CRON_SECRET"]],
   ["Google storage pinning", ["GOOGLE_SPREADSHEET_ID"]],
   ["Web research optional", ["TAVILY_API_KEY"]],
 ];
+
+const configuredProvider = (process.env.AI_PROVIDER || "").trim().toLowerCase();
+const aiProvider = configuredProvider ||
+  (process.env.OPENROUTER_API_KEY ? "openrouter" : "openai");
+const validProvider = aiProvider === "openrouter" || aiProvider === "openai";
+const aiKeySet = validProvider &&
+  (aiProvider === "openrouter"
+    ? !!process.env.OPENROUTER_API_KEY
+    : !!process.env.OPENAI_API_KEY);
+const aiModelSet = aiProvider === "openrouter"
+  ? !!(process.env.OPENROUTER_MODEL || process.env.AI_MODEL || "openrouter/free")
+  : !!(process.env.OPENAI_MODEL || process.env.AI_MODEL || "gpt-5.6");
+const googleBackgroundSet = !!(
+  process.env.GOOGLE_REFRESH_TOKEN_ENCRYPTED || process.env.GOOGLE_REFRESH_TOKEN
+);
 
 let missingCore = false;
 console.log("Ubique environment preflight (values are never printed)");
@@ -25,6 +39,12 @@ for (const [label, keys] of groups) {
   if (label === "Core production" && keys.some((key) => !process.env[key]))
     missingCore = true;
 }
+console.log(
+  `- AI: provider=${validProvider ? aiProvider : "INVALID"} | key=${aiKeySet ? "SET" : "MISSING"} | model=${aiModelSet ? "SET" : "MISSING"}`,
+);
+console.log(
+  `- Google background token: ${googleBackgroundSet ? "SET" : "MISSING"}`,
+);
 
 const strict = process.argv.includes("--strict");
 if (strict && missingCore) {
@@ -34,15 +54,19 @@ if (strict && missingCore) {
   process.exit(1);
 }
 
-if (!process.env.OPENAI_API_KEY)
+if (!validProvider)
+  console.log("Note: AI_PROVIDER must be openrouter or openai.");
+else if (!aiKeySet)
   console.log(
-    "Note: AI preparation will be unavailable until OPENAI_API_KEY is set.",
+    aiProvider === "openrouter"
+      ? "Note: AI preparation will be unavailable until OPENROUTER_API_KEY is set."
+      : "Note: AI preparation will be unavailable until OPENAI_API_KEY is set.",
   );
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET)
   console.log(
     "Note: Google-connected writes remain unavailable; demo mode can still render.",
   );
-if (!process.env.GOOGLE_REFRESH_TOKEN)
+if (!googleBackgroundSet)
   console.log(
     "Note: unattended Gmail/watch cron jobs cannot access Google yet.",
   );
