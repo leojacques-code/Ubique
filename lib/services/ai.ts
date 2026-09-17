@@ -5,6 +5,11 @@ import { resolveAiTarget } from "./aiConfig";
 type Options = { fast?: boolean; maxOutputTokens?: number };
 type Provider = "openrouter" | "openai";
 type UnknownRecord = Record<string, unknown>;
+type ProviderRouting = {
+  data_collection: "allow" | "deny";
+  zdr?: boolean;
+  require_parameters?: boolean;
+};
 
 export function aiTransportPolicy(provider: Provider) {
   return provider === "openrouter"
@@ -46,17 +51,26 @@ export function aiRequestBody<T>(
   input: string,
   schema: z.ZodType<T>,
   maxOutputTokens: number,
-  providerRouting?: { data_collection: "allow" | "deny"; zdr?: boolean },
+  providerRouting?: ProviderRouting,
 ) {
   const prompt = jsonPrompt(instruction, schema);
   if (provider === "openrouter") {
+    const jsonSchema = z.toJSONSchema(schema);
     const body: Record<string, unknown> = {
       model,
       messages: [
         { role: "system", content: prompt },
         { role: "user", content: input },
       ],
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "ubique_result",
+          strict: true,
+          schema: jsonSchema,
+        },
+      },
+      reasoning: { enabled: false },
       max_tokens: maxOutputTokens,
     };
     if (providerRouting) body.provider = providerRouting;
@@ -172,6 +186,7 @@ export async function ai<T>(
 
   const policy = aiTransportPolicy(target.provider);
   let res: Response | undefined;
+  let result: unknown;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
@@ -211,7 +226,22 @@ export async function ai<T>(
       retryableStatus(res.status)
     ) {
       await new Promise((resolve) => setTimeout(resolve, 750));
+      res = undefined;
       continue;
+    }
+
+    if (res.ok) {
+      result = await res.json();
+      if (
+        target.provider === "openrouter" &&
+        !extractContent(target.provider, result).trim() &&
+        attempt < policy.attempts
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        res = undefined;
+        result = undefined;
+        continue;
+      }
     }
     break;
   }
@@ -231,7 +261,7 @@ export async function ai<T>(
     throw new Error(await apiErrorMessage(res, label));
   }
 
-  const result: unknown = await res.json();
+  if (result === undefined) result = await res.json();
   if (target.provider === "openai") {
     const status = asRecord(result)?.status;
     if (typeof status === "string" && status !== "completed") {
@@ -242,7 +272,11 @@ export async function ai<T>(
   }
 
   const content = extractContent(target.provider, result);
-  if (!content)
-    throw new Error("Le fournisseur IA n’a renvoyé aucun contenu exploitable.");
+  if (!content.trim())
+    throw new Error(
+      target.provider === "openrouter"
+        ? "OpenRouter gratuit a renvoyé deux réponses vides. Réessayez dans quelques instants."
+        : "Le fournisseur IA n’a renvoyé aucun contenu exploitable.",
+    );
   return schema.parse(parseJsonContent(content));
 }
