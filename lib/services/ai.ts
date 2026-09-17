@@ -22,6 +22,105 @@ function isTimeout(error: unknown) {
   );
 }
 
+function jsonPrompt<T>(instruction: string, schema: z.ZodType<T>) {
+  return (
+    rules +
+    "\n" +
+    instruction +
+    "\nRetourne exclusivement un objet JSON conforme à ce schéma: " +
+    JSON.stringify(z.toJSONSchema(schema))
+  );
+}
+
+export function aiRequestBody<T>(
+  provider: Provider,
+  model: string,
+  instruction: string,
+  input: string,
+  schema: z.ZodType<T>,
+  maxOutputTokens: number,
+  providerRouting?: { data_collection: "allow" | "deny"; zdr?: boolean },
+) {
+  const prompt = jsonPrompt(instruction, schema);
+  if (provider === "openrouter") {
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        { role: "system", content: prompt },
+        { role: "user", content: input },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: maxOutputTokens,
+    };
+    if (providerRouting) body.provider = providerRouting;
+    return body;
+  }
+
+  return {
+    model,
+    instructions: prompt,
+    input,
+    text: { format: { type: "json_object" } },
+    max_output_tokens: maxOutputTokens,
+    store: false,
+  };
+}
+
+function extractContent(provider: Provider, result: any) {
+  if (provider === "openrouter") {
+    const content = result?.choices?.[0]?.message?.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .map((part) =>
+          typeof part === "string"
+            ? part
+            : typeof part?.text === "string"
+              ? part.text
+              : "",
+        )
+        .join("");
+    }
+    return "";
+  }
+
+  return (
+    (typeof result.output_text === "string" ? result.output_text : "") ||
+    (result.output || [])
+      .filter((o: { type: string }) => o.type === "message")
+      .flatMap(
+        (o: { content: { type: string; text?: string }[] }) => o.content || [],
+      )
+      .filter((c: { type: string }) => c.type === "output_text")
+      .map((c: { text: string }) => c.text)
+      .join("")
+  );
+}
+
+function parseJsonContent(content: string) {
+  const trimmed = content.trim();
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+  return JSON.parse(unfenced);
+}
+
+async function apiErrorMessage(res: Response, label: string) {
+  let detail = "";
+  try {
+    const payload = await res.json();
+    if (typeof payload?.error?.message === "string") detail = payload.error.message;
+    else if (typeof payload?.message === "string") detail = payload.message;
+  } catch {
+    // Keep the generic error below.
+  }
+  const safeDetail = detail.replace(/\s+/g, " ").slice(0, 240);
+  return safeDetail
+    ? `${label} indisponible (${res.status}) : ${safeDetail}`
+    : `${label} indisponible (${res.status}). Réessayez plus tard.`;
+}
+
 export async function ai<T>(
   instruction: string,
   context: unknown,
@@ -43,20 +142,16 @@ export async function ai<T>(
       "Contexte trop volumineux. Réduisez les pièces et sources avant préparation.",
     );
 
-  const body: Record<string, unknown> = {
-    model: target.model,
-    instructions:
-      rules +
-      "\n" +
-      instruction +
-      "\nRetourne exclusivement un objet JSON conforme à ce schéma: " +
-      JSON.stringify(z.toJSONSchema(schema)),
+  const maxOutputTokens = Math.min(options.maxOutputTokens ?? 6000, 8000);
+  const body = aiRequestBody(
+    target.provider,
+    target.model,
+    instruction,
     input,
-    text: { format: { type: "json_object" } },
-    max_output_tokens: Math.min(options.maxOutputTokens ?? 6000, 8000),
-    store: false,
-  };
-  if (target.providerRouting) body.provider = target.providerRouting;
+    schema,
+    maxOutputTokens,
+    target.providerRouting,
+  );
 
   const policy = aiTransportPolicy(target.provider);
   let res: Response | undefined;
@@ -116,27 +211,21 @@ export async function ai<T>(
 
   if (!res.ok) {
     const label = target.provider === "openrouter" ? "OpenRouter" : "OpenAI";
-    throw new Error(`${label} indisponible (${res.status}). Réessayez plus tard.`);
+    throw new Error(await apiErrorMessage(res, label));
   }
 
   const result = await res.json();
-  if (result.status && result.status !== "completed")
+  if (
+    target.provider === "openai" &&
+    result.status &&
+    result.status !== "completed"
+  )
     throw new Error(
       "Réponse IA incomplète. Aucun résultat partiel enregistré.",
     );
 
-  const content =
-    (typeof result.output_text === "string" ? result.output_text : "") ||
-    (result.output || [])
-      .filter((o: { type: string }) => o.type === "message")
-      .flatMap(
-        (o: { content: { type: string; text?: string }[] }) => o.content || [],
-      )
-      .filter((c: { type: string }) => c.type === "output_text")
-      .map((c: { text: string }) => c.text)
-      .join("");
-
+  const content = extractContent(target.provider, result);
   if (!content)
     throw new Error("Le fournisseur IA n’a renvoyé aucun contenu exploitable.");
-  return schema.parse(JSON.parse(content));
+  return schema.parse(parseJsonContent(content));
 }
