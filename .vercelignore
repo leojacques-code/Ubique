@@ -1,0 +1,10 @@
+upload/
+private/
+*.pdf
+*.docx
+.env*
+!.env.example
+.git/
+node_modules/
+tests/
+test-results/
