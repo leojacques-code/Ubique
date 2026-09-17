@@ -3,6 +3,24 @@ import { rules } from "../prompts/rules";
 import { resolveAiTarget } from "./aiConfig";
 
 type Options = { fast?: boolean; maxOutputTokens?: number };
+type Provider = "openrouter" | "openai";
+
+export function aiTransportPolicy(provider: Provider) {
+  return provider === "openrouter"
+    ? { attempts: 2, timeoutMs: 120000 }
+    : { attempts: 1, timeoutMs: 90000 };
+}
+
+function retryableStatus(status: number) {
+  return [408, 429, 500, 502, 503, 504].includes(status);
+}
+
+function isTimeout(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.name === "TimeoutError")
+  );
+}
 
 export async function ai<T>(
   instruction: string,
@@ -40,16 +58,61 @@ export async function ai<T>(
   };
   if (target.providerRouting) body.provider = target.providerRouting;
 
-  const res = await fetch(target.endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${target.apiKey}`,
-      "Content-Type": "application/json",
-      ...target.headers,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(90000),
-  });
+  const policy = aiTransportPolicy(target.provider);
+  let res: Response | undefined;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
+    try {
+      res = await fetch(target.endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${target.apiKey}`,
+          "Content-Type": "application/json",
+          ...target.headers,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(policy.timeoutMs),
+      });
+    } catch (error) {
+      lastError = error;
+      if (
+        target.provider === "openrouter" &&
+        attempt < policy.attempts &&
+        isTimeout(error)
+      ) {
+        continue;
+      }
+      if (isTimeout(error)) {
+        throw new Error(
+          target.provider === "openrouter"
+            ? "OpenRouter gratuit a dépassé le délai de réponse après deux tentatives. Réessayez dans quelques instants."
+            : "Le fournisseur IA a dépassé le délai de réponse. Réessayez dans quelques instants.",
+        );
+      }
+      throw error;
+    }
+
+    if (
+      target.provider === "openrouter" &&
+      attempt < policy.attempts &&
+      retryableStatus(res.status)
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      continue;
+    }
+    break;
+  }
+
+  if (!res) {
+    if (isTimeout(lastError))
+      throw new Error(
+        "OpenRouter gratuit a dépassé le délai de réponse. Réessayez dans quelques instants.",
+      );
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Le fournisseur IA n’a pas répondu.");
+  }
 
   if (!res.ok) {
     const label = target.provider === "openrouter" ? "OpenRouter" : "OpenAI";
@@ -73,6 +136,7 @@ export async function ai<T>(
       .map((c: { text: string }) => c.text)
       .join("");
 
-  if (!content) throw new Error("Le fournisseur IA n’a renvoyé aucun contenu exploitable.");
+  if (!content)
+    throw new Error("Le fournisseur IA n’a renvoyé aucun contenu exploitable.");
   return schema.parse(JSON.parse(content));
 }
