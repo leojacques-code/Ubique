@@ -1,1 +1,5 @@
-export default function Watch(){return <div className="page"><div className="page-head"><div><h1>Veille</h1><p>Découverte quotidienne filtrée : PE, marchés, crédit, M&A puis métiers adjacents.</p></div></div><div className="grid two-col"><section className="panel"><h2>Sources</h2><div className="list"><div className="list-item"><div><strong>Gmail Job Alerts</strong><p>Source robuste pour LinkedIn et alertes déjà reçues.</p></div><span className="badge">AUTO</span></div><div className="list-item"><div><strong>Recherche web</strong><p>Tavily optionnel pour Careers, ATS et occurrences publiques.</p></div><span className="badge">OPTIONNEL</span></div></div></section><section className="panel"><h2>Règles</h2><p className="muted">Déduplication par société + titre normalisé + localisation + date de début. ATS/site officiel prioritaire. Pas de scraping agressif LinkedIn.</p></section></div></div>}
+import Page from "@/app/page";
+export const dynamic = "force-dynamic";
+export default function RoutedPage() {
+  return <Page searchParams={Promise.resolve({ view: "Veille" })} />;
+}

@@ -1,3 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server'; import { runGmailSync } from '@/lib/sync';
-function allowed(req:NextRequest){const secret=process.env.CRON_SECRET;if(!secret)return false;return req.headers.get('authorization')===`Bearer ${secret}`}
-export async function GET(req:NextRequest){if(!allowed(req))return NextResponse.json({error:'Unauthorized'},{status:401});try{return NextResponse.json(await runGmailSync())}catch(e:any){return NextResponse.json({error:e.message},{status:500})}}
+import { cronToken, AuthError } from "@/lib/auth";
+import { gmailSync } from "@/lib/services/gmailSyncService";
+export const maxDuration = 300;
+export async function GET(request: Request) {
+  try {
+    return Response.json(await gmailSync(await cronToken(request)));
+  } catch (e) {
+    return Response.json(
+      { error: e instanceof Error ? e.message : "Échec de synchronisation" },
+      { status: e instanceof AuthError ? 401 : 503 },
+    );
+  }
+}

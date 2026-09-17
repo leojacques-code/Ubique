@@ -1,82 +1,67 @@
-import { getSession } from './session';
-
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const tokenCache = new Map<string,{accessToken:string;expiresAt:number}>();
-
-async function refreshAccessToken(refreshToken: string) {
-  const cached=tokenCache.get(refreshToken);
-  if(cached&&cached.expiresAt>Date.now()+60_000)return cached.accessToken;
-  const clientId=process.env.GOOGLE_CLIENT_ID||'';
-  const clientSecret=process.env.GOOGLE_CLIENT_SECRET||'';
-  if(!clientId||!clientSecret)throw new Error('Google OAuth client credentials are not configured');
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    refresh_token: refreshToken,
-    grant_type: 'refresh_token'
+import { createHash } from "node:crypto";
+export class ProviderError extends Error {
+  constructor(
+    public provider: string,
+    public status: number,
+  ) {
+    super(
+      `${provider} indisponible (${status}). Vérifiez la connexion puis réessayez.`,
+    );
+  }
+}
+export async function google<T>(
+  token: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const res = await fetch("https://www.googleapis.com/" + path, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...init.headers,
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(25000),
   });
-  const res = await fetch(GOOGLE_TOKEN_URL, { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body, cache:'no-store', signal:AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error(`Google token refresh failed: ${res.status}`);
-  const data=await res.json() as {access_token?:string;expires_in?:number};
-  if(!data.access_token)throw new Error('Google token refresh returned no access token');
-  tokenCache.set(refreshToken,{accessToken:data.access_token,expiresAt:Date.now()+(data.expires_in||3600)*1000});
-  return data.access_token;
+  if (!res.ok) throw new ProviderError("Google", res.status);
+  return res.status === 204 ? (undefined as T) : res.json();
 }
-
-export async function getGoogleAccessToken(background = false): Promise<string | null> {
-  if (!background) {
-    const session = await getSession();
-    if (session?.accessToken && session.expiresAt > Date.now() + 60_000) return session.accessToken;
-    if (session?.refreshToken) return refreshAccessToken(session.refreshToken);
-    return null;
-  }
-  if (process.env.GOOGLE_REFRESH_TOKEN) return refreshAccessToken(process.env.GOOGLE_REFRESH_TOKEN);
-  return null;
+const tokenCache = new Map<string, { token: string; expires: number }>();
+export async function refresh(refreshToken: string) {
+  const key = createHash("sha256").update(refreshToken).digest("hex");
+  const cached = tokenCache.get(key);
+  if (cached && cached.expires > Date.now() + 60000) return cached.token;
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || "",
+      client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok)
+    throw new ProviderError(
+      "Google OAuth : reconnexion nécessaire",
+      res.status,
+    );
+  const result = await res.json();
+  if (!result.access_token) throw new Error("Jeton Google absent");
+  if (tokenCache.size > 10) tokenCache.clear();
+  tokenCache.set(key, {
+    token: result.access_token,
+    expires: Date.now() + Number(result.expires_in || 3600) * 1000,
+  });
+  return result.access_token as string;
 }
-
-export async function googleFetch<T>(url: string, init: RequestInit = {}, background = false): Promise<T> {
-  const token = await getGoogleAccessToken(background);
-  if (!token) throw new Error('Google not connected');
-  const res = await fetch(url, { ...init, cache:'no-store', signal:init.signal||AbortSignal.timeout(25_000), headers: { Authorization:`Bearer ${token}`, 'Content-Type':'application/json', ...(init.headers || {}) } });
-  if (!res.ok) {
-    const detail=(await res.text()).slice(0,600);
-    throw new Error(`Google API ${res.status}${detail?`: ${detail}`:''}`);
-  }
-  return res.json() as Promise<T>;
-}
-
-export async function gmailSearch(query: string, background = false) {
-  const safeQuery=query.replace(/[\r\n]/g,' ').trim().slice(0,800);
-  const list = await googleFetch<{messages?:{id:string;threadId:string}[]}>(`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(safeQuery)}&maxResults=20`, {}, background);
-  if (!list.messages?.length) return [];
-  return Promise.all(list.messages.map(async ({id}) => {
-    const msg = await googleFetch<any>(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`, {}, background);
-    const headers = Object.fromEntries((msg.payload?.headers || []).map((h:{name:string;value:string}) => [h.name.toLowerCase(), h.value]));
-    return { id, threadId:msg.threadId, subject:headers.subject || '', from:headers.from || '', to:headers.to || '', date:headers.date || '', snippet:msg.snippet || '', labelIds:msg.labelIds || [] };
-  }));
-}
-
-function encodeHeader(value:string){
-  return `=?UTF-8?B?${Buffer.from(value,'utf8').toString('base64')}?=`;
-}
-
-function safeMailbox(value:string){
-  const email=value.trim();
-  if(/[\r\n]/.test(email)||email.length>320||!/^\S+@\S+\.\S+$/.test(email))throw new Error('Adresse email de brouillon invalide');
-  return email;
-}
-
-export async function createGmailDraft(to: string, subject: string, body: string) {
-  const mailbox=safeMailbox(to);
-  const cleanSubject=subject.replace(/[\r\n]+/g,' ').trim().slice(0,240)||'Candidature';
-  const cleanBody=body.replace(/\u0000/g,'').slice(0,120000);
-  const raw = Buffer.from([`To: ${mailbox}`,`Subject: ${encodeHeader(cleanSubject)}`,'MIME-Version: 1.0','Content-Type: text/plain; charset="UTF-8"','Content-Transfer-Encoding: 8bit','',cleanBody].join('\r\n')).toString('base64url');
-  return googleFetch<any>('https://gmail.googleapis.com/gmail/v1/users/me/drafts', { method:'POST', body:JSON.stringify({message:{raw}}) });
-}
-
-export async function addGmailLabel(messageId: string, labelName: string, background = false) {
-  const labels = await googleFetch<any>('https://gmail.googleapis.com/gmail/v1/users/me/labels', {}, background);
-  let label = (labels.labels || []).find((l:any) => l.name === labelName);
-  if (!label) label = await googleFetch<any>('https://gmail.googleapis.com/gmail/v1/users/me/labels', { method:'POST', body:JSON.stringify({name:labelName,labelListVisibility:'labelShow',messageListVisibility:'show'}) }, background);
-  await googleFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, { method:'POST', body:JSON.stringify({addLabelIds:[label.id]}) }, background);
-}
+export const scopes = [
+  "openid",
+  "email",
+  "profile",
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.compose",
+];

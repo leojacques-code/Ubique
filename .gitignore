@@ -1,8 +1,9 @@
-node_modules
-.next
-.env
-.env.local
-.vercel
-*.log
-.DS_Store
-coverage
+.env*
+!.env.example
+node_modules/
+.next/
+.vercel/
+private/
+*.tsbuildinfo
+test-results/
+playwright-report/
