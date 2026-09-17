@@ -72,12 +72,16 @@ export async function draft(
   text: string,
   attachments: { name: string; bytes: Uint8Array; mime: string }[] = [],
 ) {
-  if (!/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(to) || /[\r\n]/.test(subject))
+  const recipient = to.trim();
+  if (
+    (recipient && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(recipient)) ||
+    /[\r\n]/.test(subject)
+  )
     throw new Error("Destinataire ou objet invalide");
   const boundary = "crm_" + crypto.randomUUID();
   const b64 = (s: string) => Buffer.from(s).toString("base64");
   const parts = [
-    `To: ${to}`,
+    ...(recipient ? [`To: ${recipient}`] : []),
     `Subject: =?UTF-8?B?${b64(subject)}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
