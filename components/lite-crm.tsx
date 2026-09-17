@@ -5,7 +5,6 @@ import {
   BriefcaseBusiness,
   Check,
   ChevronRight,
-  FileText,
   LoaderCircle,
   LogOut,
   Mail,
@@ -260,7 +259,7 @@ export default function LiteCRM({
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="review-note"><Mail size={18} /><span>Jamais d'envoi automatique.<small>Ubique prépare, vous envoyez.</small></span></div>
+          <div className="review-note"><Mail size={18} /><span>Jamais d’envoi automatique.<small>Ubique prépare, vous envoyez.</small></span></div>
           <button className="account" onClick={async () => { await fetch("/api/auth/logout", { method: "POST" }); location.reload(); }}>
             <span className="avatar tiny">{data.profile.name.slice(0, 1) || "L"}</span><span>{data.profile.name || "Mon compte"}<small>Déconnexion Google</small></span><LogOut size={16} />
           </button>
@@ -285,10 +284,10 @@ export default function LiteCRM({
                 <section className="panel wide-panel">
                   <form onSubmit={prepare}>
                     <div className="form-grid">
-                      <label>URL de l'offre<input name="url" type="url" placeholder="https://careers…" /></label>
-                      <label>PDF / DOCX de l'offre<input name="file" type="file" accept=".pdf,.docx,.txt" /></label>
+                      <label>URL de l’offre<input name="url" type="url" placeholder="https://careers…" /></label>
+                      <label>PDF / DOCX de l’offre<input name="file" type="file" accept=".pdf,.docx,.txt" /></label>
                     </div>
-                    <label>Descriptif de l'offre <span className="muted">(facultatif si URL/PDF lisible)</span><textarea name="description" rows={8} placeholder="Collez ici le texte de l'offre si nécessaire…" /></label>
+                    <label>Descriptif de l’offre <span className="muted">(facultatif si URL/PDF lisible)</span><textarea name="description" rows={8} placeholder="Collez ici le texte de l'offre si nécessaire…" /></label>
                     <div className="form-grid">
                       <label>CV<select name="cvPreference" defaultValue="AUTO"><option value="AUTO">Auto selon la langue</option><option value="FR">CV français</option><option value="EN">CV anglais</option></select></label>
                       <label>Email destinataire <span className="muted">(facultatif)</span><input name="recipient" type="email" placeholder="recrutement@entreprise.com" /></label>
@@ -298,11 +297,11 @@ export default function LiteCRM({
                 </section>
                 <section className="panel">
                   <h2>Ce qui sera fait</h2>
-                  <p>1. Lire l'offre et choisir le CV FR/EN.</p>
+                  <p>1. Lire l’offre et choisir le CV FR/EN.</p>
                   <p>2. Rédiger une LM fidèle au CV et le mail.</p>
                   <p>3. Créer la LM en PDF.</p>
                   <p>4. Créer un brouillon Gmail avec CV + LM joints.</p>
-                  <p className="small muted">Aucun email n'est envoyé automatiquement.</p>
+                  <p className="small muted">Aucun email n’est envoyé automatiquement.</p>
                 </section>
                 <section className="panel">
                   <h2>CV disponibles</h2>
@@ -335,9 +334,9 @@ export default function LiteCRM({
                     <div className="panel-heading"><div><h1>{app.company}</h1><p>{app.jobTitle}{app.location ? ` · ${app.location}` : ""}</p></div><Tag tone={app.status === "En process" || app.status === "Offre" ? "green" : app.status === "Refus" ? "red" : "neutral"}>{app.status}</Tag></div>
                     {app.notes && <p>{app.notes}</p>}
                     <div className="flex wrap">
-                      {app.officialUrl && <a className="button" href={app.officialUrl} target="_blank" rel="noreferrer">Voir l'offre</a>}
+                      {app.officialUrl && <a className="button" href={app.officialUrl} target="_blank" rel="noreferrer">Voir l’offre</a>}
                       <a className="button primary" href="https://mail.google.com/mail/u/0/#drafts" target="_blank" rel="noreferrer"><Mail size={16} />Ouvrir Gmail</a>
-                      {!app.applicationDate && <button disabled={!!busy} onClick={() => markSent(app)}><Check size={16} />J'ai envoyé</button>}
+                      {!app.applicationDate && <button disabled={!!busy} onClick={() => markSent(app)}><Check size={16} />J’ai envoyé</button>}
                       <button onClick={() => setSelected("")}>Retour à la liste</button>
                     </div>
                   </section>
