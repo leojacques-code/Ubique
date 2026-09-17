@@ -8,7 +8,6 @@ type UnknownRecord = Record<string, unknown>;
 type ProviderRouting = {
   data_collection: "allow" | "deny";
   zdr?: boolean;
-  require_parameters?: boolean;
 };
 
 export function aiTransportPolicy(provider: Provider) {
@@ -39,7 +38,7 @@ function jsonPrompt<T>(instruction: string, schema: z.ZodType<T>) {
     rules +
     "\n" +
     instruction +
-    "\nRetourne exclusivement un objet JSON conforme à ce schéma: " +
+    "\nRetourne exclusivement un objet JSON valide conforme à ce schéma. Aucun markdown, aucune explication autour du JSON: " +
     JSON.stringify(z.toJSONSchema(schema))
   );
 }
@@ -55,22 +54,12 @@ export function aiRequestBody<T>(
 ) {
   const prompt = jsonPrompt(instruction, schema);
   if (provider === "openrouter") {
-    const jsonSchema = z.toJSONSchema(schema);
     const body: Record<string, unknown> = {
       model,
       messages: [
         { role: "system", content: prompt },
         { role: "user", content: input },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "ubique_result",
-          strict: true,
-          schema: jsonSchema,
-        },
-      },
-      reasoning: { enabled: false },
       max_tokens: maxOutputTokens,
     };
     if (providerRouting) body.provider = providerRouting;
@@ -133,7 +122,16 @@ function parseJsonContent(content: string) {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "")
     .trim();
-  return JSON.parse(unfenced);
+  try {
+    return JSON.parse(unfenced);
+  } catch {
+    const first = unfenced.indexOf("{");
+    const last = unfenced.lastIndexOf("}");
+    if (first >= 0 && last > first) {
+      return JSON.parse(unfenced.slice(first, last + 1));
+    }
+    throw new Error("La réponse IA ne contient pas de JSON exploitable.");
+  }
 }
 
 async function apiErrorMessage(res: Response, label: string) {
@@ -150,6 +148,10 @@ async function apiErrorMessage(res: Response, label: string) {
   return safeDetail
     ? `${label} indisponible (${res.status}) : ${safeDetail}`
     : `${label} indisponible (${res.status}). Réessayez plus tard.`;
+}
+
+function parseValidated<T>(content: string, schema: z.ZodType<T>): T {
+  return schema.parse(parseJsonContent(content));
 }
 
 export async function ai<T>(
@@ -185,11 +187,10 @@ export async function ai<T>(
   );
 
   const policy = aiTransportPolicy(target.provider);
-  let res: Response | undefined;
-  let result: unknown;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
+    let res: Response;
     try {
       res = await fetch(target.endpoint, {
         method: "POST",
@@ -220,63 +221,60 @@ export async function ai<T>(
       throw error;
     }
 
-    if (
-      target.provider === "openrouter" &&
-      attempt < policy.attempts &&
-      retryableStatus(res.status)
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 750));
-      res = undefined;
-      continue;
-    }
-
-    if (res.ok) {
-      result = await res.json();
+    if (!res.ok) {
       if (
         target.provider === "openrouter" &&
-        !extractContent(target.provider, result).trim() &&
-        attempt < policy.attempts
+        attempt < policy.attempts &&
+        retryableStatus(res.status)
       ) {
         await new Promise((resolve) => setTimeout(resolve, 750));
-        res = undefined;
-        result = undefined;
         continue;
       }
+      const label = target.provider === "openrouter" ? "OpenRouter" : "OpenAI";
+      throw new Error(await apiErrorMessage(res, label));
     }
-    break;
-  }
 
-  if (!res) {
-    if (isTimeout(lastError))
+    const result = await res.json();
+    if (target.provider === "openai") {
+      const status = asRecord(result)?.status;
+      if (typeof status === "string" && status !== "completed") {
+        throw new Error(
+          "Réponse IA incomplète. Aucun résultat partiel enregistré.",
+        );
+      }
+    }
+
+    const content = extractContent(target.provider, result);
+    if (!content.trim()) {
+      lastError = new Error("Réponse vide");
+      if (target.provider === "openrouter" && attempt < policy.attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        continue;
+      }
       throw new Error(
-        "OpenRouter gratuit a dépassé le délai de réponse. Réessayez dans quelques instants.",
+        target.provider === "openrouter"
+          ? "OpenRouter gratuit a renvoyé deux réponses vides. Réessayez dans quelques instants."
+          : "Le fournisseur IA n’a renvoyé aucun contenu exploitable.",
       );
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("Le fournisseur IA n’a pas répondu.");
-  }
+    }
 
-  if (!res.ok) {
-    const label = target.provider === "openrouter" ? "OpenRouter" : "OpenAI";
-    throw new Error(await apiErrorMessage(res, label));
-  }
-
-  if (result === undefined) result = await res.json();
-  if (target.provider === "openai") {
-    const status = asRecord(result)?.status;
-    if (typeof status === "string" && status !== "completed") {
+    try {
+      return parseValidated(content, schema);
+    } catch (error) {
+      lastError = error;
+      if (target.provider === "openrouter" && attempt < policy.attempts) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        continue;
+      }
       throw new Error(
-        "Réponse IA incomplète. Aucun résultat partiel enregistré.",
+        target.provider === "openrouter"
+          ? "Le modèle gratuit a répondu, mais pas dans un JSON valide. Réessayez dans quelques instants."
+          : "La réponse IA ne respecte pas le format attendu.",
       );
     }
   }
 
-  const content = extractContent(target.provider, result);
-  if (!content.trim())
-    throw new Error(
-      target.provider === "openrouter"
-        ? "OpenRouter gratuit a renvoyé deux réponses vides. Réessayez dans quelques instants."
-        : "Le fournisseur IA n’a renvoyé aucun contenu exploitable.",
-    );
-  return schema.parse(parseJsonContent(content));
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Le fournisseur IA n’a pas répondu.");
 }
