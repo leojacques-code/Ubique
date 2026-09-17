@@ -5,7 +5,14 @@ import { extractPdfText } from "@/lib/services/pdfTextService";
 import { SheetsRepository, entity } from "@/lib/repositories/store";
 import type { Document } from "@/lib/types";
 import { ai } from "@/lib/services/ai";
+import {
+  compactCvInstruction,
+  compactProfileEvidence,
+  profileEvidenceCategories,
+} from "@/lib/services/profileEvidence";
+
 export const maxDuration = 300;
+
 export async function POST(request: Request) {
   try {
     checkOrigin(request);
@@ -29,35 +36,28 @@ export async function POST(request: Request) {
     const source = file.name;
     const schema = z.object({
       name: z.string(),
-      evidence: z.array(
-        z.object({
-          category: z.enum([
-            "Expérience",
-            "Formation",
-            "Compétence",
-            "Langue",
-            "Projet",
-            "Intérêt",
-          ]),
-          fact: z.string(),
-          type: z.enum([
-            "DIRECT",
-            "TRANSFERABLE",
-            "ACADEMIC",
-            "NOT_DEMONSTRATED",
-          ]),
-        }),
-      ),
+      evidence: z
+        .array(
+          z.object({
+            category: z.enum(profileEvidenceCategories),
+            fact: z.string().min(8).max(700),
+            type: z.enum(["DIRECT", "ACADEMIC"]),
+          }),
+        )
+        .max(40),
     });
     const parsed =
       kind === "CV"
         ? await ai(
-            "Extrais intégralement le CV : toutes expériences, dates, missions, chiffres EXACTS, outils, langues, cursus, certifications, projets et intérêts. Ne réinterprète pas les pourcentages. Ne transforme pas un classement institutionnel en preuve. Un fait par preuve, formulation concise. Ne supprime aucune expérience.",
+            compactCvInstruction,
             { text, source },
             schema,
-            { fast: true, maxOutputTokens: 4000 },
+            { fast: true, maxOutputTokens: 3200 },
           )
         : null;
+    const compactedEvidence = parsed
+      ? compactProfileEvidence(parsed.evidence, 40)
+      : [];
     const drive = await uploadDrive(
       token,
       file.name,
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       profile: parsed
         ? {
             name: parsed.name,
-            evidence: parsed.evidence.map((e) => ({
+            evidence: compactedEvidence.map((e) => ({
               ...e,
               id: crypto.randomUUID(),
               source,
