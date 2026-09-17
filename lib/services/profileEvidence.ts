@@ -15,6 +15,12 @@ export type ExtractedProfileEvidence = {
   type: "DIRECT" | "ACADEMIC";
 };
 
+type RawProfileEvidence = {
+  category: string;
+  fact: string;
+  type: string;
+};
+
 function normalizedKey(value: string) {
   return value
     .normalize("NFKD")
@@ -24,8 +30,60 @@ function normalizedKey(value: string) {
     .trim();
 }
 
+export function normalizeProfileEvidenceCategory(
+  value: string,
+): ProfileEvidenceCategory | null {
+  const key = normalizedKey(value);
+  const aliases: Record<string, ProfileEvidenceCategory> = {
+    experience: "Expérience",
+    experiences: "Expérience",
+    "experience professionnelle": "Expérience",
+    "professional experience": "Expérience",
+    "work experience": "Expérience",
+    employment: "Expérience",
+    formation: "Formation",
+    formations: "Formation",
+    education: "Formation",
+    academic: "Formation",
+    academics: "Formation",
+    "academic background": "Formation",
+    "academic education": "Formation",
+    "formation academique": "Formation",
+    competence: "Compétence",
+    competences: "Compétence",
+    skill: "Compétence",
+    skills: "Compétence",
+    competency: "Compétence",
+    competencies: "Compétence",
+    langue: "Langue",
+    langues: "Langue",
+    language: "Langue",
+    languages: "Langue",
+    projet: "Projet",
+    projets: "Projet",
+    project: "Projet",
+    projects: "Projet",
+    interet: "Intérêt",
+    interets: "Intérêt",
+    interest: "Intérêt",
+    interests: "Intérêt",
+    hobby: "Intérêt",
+    hobbies: "Intérêt",
+  };
+  return aliases[key] ?? null;
+}
+
+export function normalizeProfileEvidenceType(
+  value: string,
+): "DIRECT" | "ACADEMIC" | null {
+  const key = normalizedKey(value);
+  if (key === "direct") return "DIRECT";
+  if (key === "academic" || key === "academique") return "ACADEMIC";
+  return null;
+}
+
 export function compactProfileEvidence(
-  evidence: ExtractedProfileEvidence[],
+  evidence: RawProfileEvidence[],
   limit = 40,
 ) {
   const seen = new Set<string>();
@@ -33,15 +91,13 @@ export function compactProfileEvidence(
 
   for (const item of evidence) {
     const fact = item.fact.replace(/\s+/g, " ").trim();
-    if (!fact) continue;
-    const key = `${item.category}:${normalizedKey(fact)}`;
+    const category = normalizeProfileEvidenceCategory(item.category);
+    const type = normalizeProfileEvidenceType(item.type);
+    if (!fact || !category || !type) continue;
+    const key = `${category}:${normalizedKey(fact)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push({
-      category: item.category,
-      fact,
-      type: item.type === "ACADEMIC" ? "ACADEMIC" : "DIRECT",
-    });
+    result.push({ category, fact, type });
     if (result.length >= limit) break;
   }
 
@@ -65,8 +121,19 @@ Règles de regroupement :
 - N'invente rien, ne complète aucune information manquante et ne transforme jamais M&A en Private Equity.
 - Un classement, une réputation d'école ou une connaissance générale extérieure au CV n'est pas une preuve.
 
+Format canonique obligatoire :
+- category doit être EXACTEMENT l'une de ces valeurs, même si le CV est en anglais : Expérience, Formation, Compétence, Langue, Projet, Intérêt.
+- type doit être EXACTEMENT DIRECT ou ACADEMIC.
+- Le texte de fact reste dans la langue du CV source : français pour un CV FR, anglais pour un CV EN.
+
 Classification du profil source :
 - DIRECT = fait explicitement attesté par le CV (expérience, compétence pratiquée, outil, langue, projet, intérêt).
 - ACADEMIC = cursus, cours, projet ou connaissance strictement académique.
 - N'utilise pas TRANSFERABLE ni NOT_DEMONSTRATED pendant l'extraction du CV : ces deux catégories sont déterminées plus tard lors du matching avec une offre.
 `;
+
+export function compactCvInstructionForLanguage(language: string) {
+  return `${compactCvInstruction}\nLe CV traité est en ${
+    language.toUpperCase() === "EN" ? "anglais" : "français"
+  }. Respecte strictement la langue source pour fact et les libellés canoniques ci-dessus pour category/type.`;
+}

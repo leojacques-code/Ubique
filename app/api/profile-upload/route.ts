@@ -6,9 +6,8 @@ import { SheetsRepository, entity } from "@/lib/repositories/store";
 import type { Document } from "@/lib/types";
 import { ai } from "@/lib/services/ai";
 import {
-  compactCvInstruction,
+  compactCvInstructionForLanguage,
   compactProfileEvidence,
-  profileEvidenceCategories,
 } from "@/lib/services/profileEvidence";
 
 export const maxDuration = 300;
@@ -39,9 +38,9 @@ export async function POST(request: Request) {
       evidence: z
         .array(
           z.object({
-            category: z.enum(profileEvidenceCategories),
+            category: z.string().min(2).max(60),
             fact: z.string().min(8).max(700),
-            type: z.enum(["DIRECT", "ACADEMIC"]),
+            type: z.string().min(4).max(30),
           }),
         )
         .max(40),
@@ -49,8 +48,8 @@ export async function POST(request: Request) {
     const parsed =
       kind === "CV"
         ? await ai(
-            compactCvInstruction,
-            { text, source },
+            compactCvInstructionForLanguage(language),
+            { text, source, language },
             schema,
             { fast: true, maxOutputTokens: 3200 },
           )
@@ -58,6 +57,11 @@ export async function POST(request: Request) {
     const compactedEvidence = parsed
       ? compactProfileEvidence(parsed.evidence, 40)
       : [];
+    if (parsed && parsed.evidence.length > 0 && compactedEvidence.length === 0) {
+      throw new Error(
+        "Le CV a été lu, mais les catégories extraites sont incompatibles. Réessayez l’analyse.",
+      );
+    }
     const drive = await uploadDrive(
       token,
       file.name,

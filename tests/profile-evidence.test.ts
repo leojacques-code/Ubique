@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   compactCvInstruction,
+  compactCvInstructionForLanguage,
   compactProfileEvidence,
+  normalizeProfileEvidenceCategory,
+  normalizeProfileEvidenceType,
   type ExtractedProfileEvidence,
 } from "../lib/services/profileEvidence";
 
@@ -31,6 +34,38 @@ test("CV evidence compaction removes duplicates and preserves academic typing", 
   assert.equal(result[1].type, "ACADEMIC");
 });
 
+test("CV evidence compaction normalizes English labels into canonical categories", () => {
+  const result = compactProfileEvidence([
+    {
+      category: "Professional Experience",
+      fact: "Triactis — M&A Analyst | Worked on sell-side transactions.",
+      type: "Direct",
+    },
+    {
+      category: "Education",
+      fact: "Université Côte d’Azur — academic curriculum.",
+      type: "Academic",
+    },
+    {
+      category: "Skills",
+      fact: "Financial modelling and valuation explicitly listed in the CV.",
+      type: "DIRECT",
+    },
+  ]);
+
+  assert.deepEqual(
+    result.map((item) => [item.category, item.type]),
+    [
+      ["Expérience", "DIRECT"],
+      ["Formation", "ACADEMIC"],
+      ["Compétence", "DIRECT"],
+    ],
+  );
+  assert.equal(normalizeProfileEvidenceCategory("Languages"), "Langue");
+  assert.equal(normalizeProfileEvidenceCategory("Interests"), "Intérêt");
+  assert.equal(normalizeProfileEvidenceType("academic"), "ACADEMIC");
+});
+
 test("CV evidence compaction enforces a hard reviewable limit", () => {
   const input: ExtractedProfileEvidence[] = Array.from({ length: 60 }, (_, i) => ({
     category: "Compétence" as const,
@@ -40,8 +75,10 @@ test("CV evidence compaction enforces a hard reviewable limit", () => {
   assert.equal(compactProfileEvidence(input).length, 40);
 });
 
-test("CV extraction instruction asks for grouped evidence rather than micro-facts", () => {
+test("CV extraction instruction asks for grouped bilingual-safe evidence", () => {
   assert.match(compactCvInstruction, /20 à 35 preuves/i);
   assert.match(compactCvInstruction, /3 à 6 preuves maximum/i);
   assert.match(compactCvInstruction, /N'utilise pas TRANSFERABLE/i);
+  assert.match(compactCvInstruction, /même si le CV est en anglais/i);
+  assert.match(compactCvInstructionForLanguage("EN"), /CV traité est en anglais/i);
 });
