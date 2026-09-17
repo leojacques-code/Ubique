@@ -14,7 +14,13 @@ import { fold } from "../lib/repositories/store";
 import { mayAutoApply } from "../lib/services/gmailSyncService";
 import { validateEvidence } from "../lib/services/applicationService";
 import { resolveAiTarget } from "../lib/services/aiConfig";
-import { aiRequestBody, aiTransportPolicy } from "../lib/services/ai";
+import {
+  aiRequestBody,
+  aiTransportPolicy,
+  extractAiPayload,
+  openRouterModelCandidates,
+  OPENROUTER_FREE_MODELS,
+} from "../lib/services/ai";
 import { googleEndpoint } from "../lib/google";
 import { demoSnapshot } from "../lib/demo";
 import { defaultProfile } from "../lib/types";
@@ -143,7 +149,7 @@ test("server PDF extraction works without browser DOM globals", async () => {
   assert.match(text, /Ubique PDF profile import/);
 });
 
-test("free AI uses portable OpenRouter routing and validates JSON locally", () => {
+test("free AI uses deterministic OpenRouter tool-calling fallbacks", () => {
   const target = resolveAiTarget(false, {
     OPENROUTER_API_KEY: "test-key",
     APP_URL: "https://ubique.example",
@@ -158,9 +164,14 @@ test("free AI uses portable OpenRouter routing and validates JSON locally", () =
   assert.equal(target.providerRouting?.zdr, undefined);
   assert.equal(target.headers["X-Title"], "Ubique");
 
+  const candidates = openRouterModelCandidates(target.model);
+  assert.deepEqual(candidates, [...OPENROUTER_FREE_MODELS]);
+  assert.equal(candidates[0], "inclusionai/ling-3.0-flash-fin:free");
+  assert.equal(candidates.at(-1), "openrouter/free");
+
   const body = aiRequestBody(
     "openrouter",
-    target.model,
+    candidates[0],
     "Extract facts",
     '{"text":"CV"}',
     z.object({ name: z.string() }),
@@ -170,6 +181,11 @@ test("free AI uses portable OpenRouter routing and validates JSON locally", () =
     max_tokens: number;
     messages: Array<{ role: string; content: string }>;
     provider: { data_collection: string; zdr?: boolean };
+    tools: Array<{
+      type: string;
+      function: { name: string; parameters: unknown };
+    }>;
+    tool_choice: { type: string; function: { name: string } };
     response_format?: unknown;
     reasoning?: unknown;
     instructions?: unknown;
@@ -178,19 +194,50 @@ test("free AI uses portable OpenRouter routing and validates JSON locally", () =
   assert.equal(body.max_tokens, 2500);
   assert.equal(body.messages[0].role, "system");
   assert.equal(body.messages[1].role, "user");
-  assert.match(body.messages[0].content, /Retourne exclusivement un objet JSON valide/);
+  assert.match(
+    body.messages[0].content,
+    /Retourne exclusivement un objet JSON valide/,
+  );
   assert.equal(body.provider.data_collection, "deny");
+  assert.equal(body.tools[0].function.name, "submit_ubique_result");
+  assert.equal(body.tool_choice.function.name, "submit_ubique_result");
   assert.equal("response_format" in body, false);
   assert.equal("reasoning" in body, false);
   assert.equal("instructions" in body, false);
   assert.equal("max_output_tokens" in body, false);
+
+  assert.equal(
+    extractAiPayload("openrouter", {
+      choices: [
+        {
+          message: {
+            content: "",
+            tool_calls: [
+              {
+                type: "function",
+                function: {
+                  name: "submit_ubique_result",
+                  arguments: '{"name":"Léo"}',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    }),
+    '{"name":"Léo"}',
+  );
 });
 
-test("free OpenRouter gets a longer timeout and one retry", () => {
+test("free OpenRouter gets a longer timeout and one retry for custom models", () => {
   assert.deepEqual(aiTransportPolicy("openrouter"), {
     attempts: 2,
     timeoutMs: 120000,
   });
+  assert.deepEqual(openRouterModelCandidates("custom/model"), [
+    "custom/model",
+    "custom/model",
+  ]);
   assert.deepEqual(aiTransportPolicy("openai"), {
     attempts: 1,
     timeoutMs: 90000,
