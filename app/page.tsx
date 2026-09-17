@@ -1,7 +1,9 @@
 import { oauthConfigured, configurationStatus } from "@/lib/config";
-import CRM from "@/components/crm";
+import LiteCRM from "@/components/lite-crm";
 import { session } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
+
 export default async function Page({
   searchParams,
 }: {
@@ -10,11 +12,10 @@ export default async function Page({
   const params = await searchParams;
   const s = await session();
   return (
-    <CRM
+    <LiteCRM
       initialView={params.view}
       initialId={params.id}
       signedIn={!!s}
-      demoEnabled={process.env.NEXT_PUBLIC_DEMO_MODE !== "false"}
       configured={oauthConfigured()}
       configuration={configurationStatus()}
     />
