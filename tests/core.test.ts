@@ -13,6 +13,7 @@ import { fold } from "../lib/repositories/store";
 import { mayAutoApply } from "../lib/services/gmailSyncService";
 import { validateEvidence } from "../lib/services/applicationService";
 import { resolveAiTarget } from "../lib/services/aiConfig";
+import { aiTransportPolicy } from "../lib/services/ai";
 import { googleEndpoint } from "../lib/google";
 import { demoSnapshot } from "../lib/demo";
 import { defaultProfile } from "../lib/types";
@@ -142,6 +143,16 @@ test("free AI defaults to OpenRouter with privacy-conscious routing", () => {
   assert.equal(target.providerRouting?.data_collection, "deny");
   assert.equal(target.providerRouting?.zdr, undefined);
   assert.equal(target.headers["X-Title"], "Ubique");
+});
+test("free OpenRouter gets a longer timeout and one retry", () => {
+  assert.deepEqual(aiTransportPolicy("openrouter"), {
+    attempts: 2,
+    timeoutMs: 120000,
+  });
+  assert.deepEqual(aiTransportPolicy("openai"), {
+    attempts: 1,
+    timeoutMs: 90000,
+  });
 });
 test("AI provider can explicitly switch back to OpenAI", () => {
   const target = resolveAiTarget(true, {

@@ -52,9 +52,10 @@ export async function POST(request: Request) {
     const parsed =
       kind === "CV"
         ? await ai(
-            "Extrais intégralement le CV : toutes expériences, dates, missions, chiffres EXACTS, outils, langues, cursus, certifications, projets et intérêts. Ne réinterprète pas les pourcentages. Ne transforme pas un classement institutionnel en preuve. Un fait par preuve. Ne supprime aucune expérience.",
+            "Extrais intégralement le CV : toutes expériences, dates, missions, chiffres EXACTS, outils, langues, cursus, certifications, projets et intérêts. Ne réinterprète pas les pourcentages. Ne transforme pas un classement institutionnel en preuve. Un fait par preuve, formulation concise. Ne supprime aucune expérience.",
             { text, source },
             schema,
+            { fast: true, maxOutputTokens: 4000 },
           )
         : null;
     const drive = await uploadDrive(
