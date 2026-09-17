@@ -11,6 +11,7 @@ export type AiTarget = {
   providerRouting?: {
     data_collection: "allow" | "deny";
     zdr?: boolean;
+    require_parameters?: boolean;
   };
 };
 
@@ -71,6 +72,7 @@ export function resolveAiTarget(
           (env.OPENROUTER_DATA_COLLECTION || "deny").toLowerCase() === "allow"
             ? "allow"
             : "deny",
+        require_parameters: true,
         ...(truthy(env.OPENROUTER_ZDR) ? { zdr: true } : {}),
       },
     };
