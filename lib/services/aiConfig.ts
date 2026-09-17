@@ -1,6 +1,6 @@
 export type AiProvider = "openrouter" | "openai";
 
-type Env = NodeJS.ProcessEnv;
+type Env = Record<string, string | undefined>;
 
 export type AiTarget = {
   provider: AiProvider;
