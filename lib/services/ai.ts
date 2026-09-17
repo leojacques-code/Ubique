@@ -11,9 +11,11 @@ type ProviderRouting = {
 };
 
 const RESULT_TOOL = "submit_ubique_result";
+const STRUCTURED_FREE_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
 
 export const OPENROUTER_FREE_MODELS = [
   "inclusionai/ling-3.0-flash-fin:free",
+  STRUCTURED_FREE_MODEL,
   "inclusionai/ling-3.0-flash:free",
   "inclusionai/ling-3.0-flash-vl:free",
   "openrouter/free",
@@ -54,9 +56,14 @@ function jsonPrompt<T>(instruction: string, schema: z.ZodType<T>) {
   );
 }
 
+function usesNativeStructuredOutput(provider: Provider, model: string) {
+  return provider === "openrouter" && model === STRUCTURED_FREE_MODEL;
+}
+
 function usesForcedToolResult(provider: Provider, model: string) {
   return (
     provider === "openrouter" &&
+    !usesNativeStructuredOutput(provider, model) &&
     (model === "openrouter/free" || model.endsWith(":free"))
   );
 }
@@ -80,7 +87,17 @@ export function aiRequestBody<T>(
       ],
       max_tokens: maxOutputTokens,
     };
-    if (usesForcedToolResult(provider, model)) {
+
+    if (usesNativeStructuredOutput(provider, model)) {
+      body.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: "ubique_result",
+          strict: true,
+          schema: z.toJSONSchema(schema),
+        },
+      };
+    } else if (usesForcedToolResult(provider, model)) {
       body.tools = [
         {
           type: "function",
@@ -97,6 +114,7 @@ export function aiRequestBody<T>(
         function: { name: RESULT_TOOL },
       };
     }
+
     if (providerRouting) body.provider = providerRouting;
     return body;
   }
