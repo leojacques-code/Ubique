@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import {
   encrypt,
   decrypt,
@@ -13,7 +14,7 @@ import { fold } from "../lib/repositories/store";
 import { mayAutoApply } from "../lib/services/gmailSyncService";
 import { validateEvidence } from "../lib/services/applicationService";
 import { resolveAiTarget } from "../lib/services/aiConfig";
-import { aiTransportPolicy } from "../lib/services/ai";
+import { aiRequestBody, aiTransportPolicy } from "../lib/services/ai";
 import { googleEndpoint } from "../lib/google";
 import { demoSnapshot } from "../lib/demo";
 import { defaultProfile } from "../lib/types";
@@ -132,17 +133,44 @@ test("server PDF extraction works without browser DOM globals", async () => {
   const text = await extractPdfText(await pdf.save());
   assert.match(text, /Ubique PDF profile import/);
 });
-test("free AI defaults to OpenRouter with privacy-conscious routing", () => {
+test("free AI defaults to OpenRouter chat completions with privacy-conscious routing", () => {
   const target = resolveAiTarget(false, {
     OPENROUTER_API_KEY: "test-key",
     APP_URL: "https://ubique.example",
   });
   assert.equal(target.provider, "openrouter");
-  assert.equal(target.endpoint, "https://openrouter.ai/api/v1/responses");
+  assert.equal(
+    target.endpoint,
+    "https://openrouter.ai/api/v1/chat/completions",
+  );
   assert.equal(target.model, "openrouter/free");
   assert.equal(target.providerRouting?.data_collection, "deny");
   assert.equal(target.providerRouting?.zdr, undefined);
   assert.equal(target.headers["X-Title"], "Ubique");
+
+  const body = aiRequestBody(
+    "openrouter",
+    target.model,
+    "Extract facts",
+    '{"text":"CV"}',
+    z.object({ name: z.string() }),
+    2500,
+    target.providerRouting,
+  ) as {
+    response_format: { type: string };
+    max_tokens: number;
+    messages: Array<{ role: string }>;
+    provider: { data_collection: string };
+    instructions?: unknown;
+    max_output_tokens?: unknown;
+  };
+  assert.equal(body.response_format.type, "json_object");
+  assert.equal(body.max_tokens, 2500);
+  assert.equal(body.messages[0].role, "system");
+  assert.equal(body.messages[1].role, "user");
+  assert.equal(body.provider.data_collection, "deny");
+  assert.equal("instructions" in body, false);
+  assert.equal("max_output_tokens" in body, false);
 });
 test("free OpenRouter gets a longer timeout and one retry", () => {
   assert.deepEqual(aiTransportPolicy("openrouter"), {

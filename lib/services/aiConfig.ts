@@ -18,11 +18,11 @@ function truthy(value?: string) {
   return ["1", "true", "yes", "on"].includes((value || "").trim().toLowerCase());
 }
 
-function endpoint(base: string) {
-  const normalized = base.replace(/\/+$/, "");
-  return normalized.endsWith("/responses")
-    ? normalized
-    : `${normalized}/responses`;
+function endpoint(base: string, path: "responses" | "chat/completions") {
+  const normalized = base
+    .replace(/\/+$/, "")
+    .replace(/\/(?:responses|chat\/completions)$/, "");
+  return `${normalized}/${path}`;
 }
 
 export function resolveAiProvider(env: Env = process.env): AiProvider {
@@ -62,6 +62,7 @@ export function resolveAiTarget(
         env.OPENROUTER_BASE_URL ||
           env.AI_BASE_URL ||
           "https://openrouter.ai/api/v1",
+        "chat/completions",
       ),
       model,
       headers,
@@ -80,6 +81,7 @@ export function resolveAiTarget(
     apiKey: env.OPENAI_API_KEY || "",
     endpoint: endpoint(
       env.OPENAI_BASE_URL || env.AI_BASE_URL || "https://api.openai.com/v1",
+      "responses",
     ),
     model: fast
       ? env.OPENAI_FAST_MODEL ||
