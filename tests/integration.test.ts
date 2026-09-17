@@ -63,7 +63,7 @@ function mockProviders() {
   let classificationCalls = 0;
   global.fetch = async (input, init) => {
     const url = String(input);
-    if (url.includes("sheets/v4/")) {
+    if (url.includes("sheets.googleapis.com/v4/")) {
       const table = url.split("/values/")[1]?.split("!")[0];
       assert(table);
       if (url.includes(":append")) {

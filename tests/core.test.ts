@@ -13,6 +13,7 @@ import { fold } from "../lib/repositories/store";
 import { mayAutoApply } from "../lib/services/gmailSyncService";
 import { validateEvidence } from "../lib/services/applicationService";
 import { resolveAiTarget } from "../lib/services/aiConfig";
+import { googleEndpoint } from "../lib/google";
 import { demoSnapshot } from "../lib/demo";
 import { defaultProfile } from "../lib/types";
 import { parseCsv } from "../lib/client-utils";
@@ -105,6 +106,16 @@ test("CSV keeps quoted commas and multiline job descriptions", () => {
     'company,jobTitle,description\nAtlas,Analyst,"Hello, world\nSecond line"',
   );
   assert.equal(rows[0].description, "Hello, world\nSecond line");
+});
+test("Google API routing uses the dedicated Sheets host", () => {
+  assert.equal(
+    googleEndpoint("sheets/v4/spreadsheets"),
+    "https://sheets.googleapis.com/v4/spreadsheets",
+  );
+  assert.equal(
+    googleEndpoint("drive/v3/files"),
+    "https://www.googleapis.com/drive/v3/files",
+  );
 });
 test("free AI defaults to OpenRouter with privacy-conscious routing", () => {
   const target = resolveAiTarget(false, {

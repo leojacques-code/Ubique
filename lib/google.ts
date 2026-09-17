@@ -9,12 +9,17 @@ export class ProviderError extends Error {
     );
   }
 }
+export function googleEndpoint(path: string) {
+  if (path.startsWith("sheets/v4/"))
+    return "https://sheets.googleapis.com/v4/" + path.slice("sheets/v4/".length);
+  return "https://www.googleapis.com/" + path;
+}
 export async function google<T>(
   token: string,
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const res = await fetch("https://www.googleapis.com/" + path, {
+  const res = await fetch(googleEndpoint(path), {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
