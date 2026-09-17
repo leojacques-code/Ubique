@@ -12,6 +12,7 @@ import {
 import { fold } from "../lib/repositories/store";
 import { mayAutoApply } from "../lib/services/gmailSyncService";
 import { validateEvidence } from "../lib/services/applicationService";
+import { resolveAiTarget } from "../lib/services/aiConfig";
 import { demoSnapshot } from "../lib/demo";
 import { defaultProfile } from "../lib/types";
 import { parseCsv } from "../lib/client-utils";
@@ -104,6 +105,28 @@ test("CSV keeps quoted commas and multiline job descriptions", () => {
     'company,jobTitle,description\nAtlas,Analyst,"Hello, world\nSecond line"',
   );
   assert.equal(rows[0].description, "Hello, world\nSecond line");
+});
+test("free AI defaults to OpenRouter with privacy-conscious routing", () => {
+  const target = resolveAiTarget(false, {
+    OPENROUTER_API_KEY: "test-key",
+    APP_URL: "https://ubique.example",
+  });
+  assert.equal(target.provider, "openrouter");
+  assert.equal(target.endpoint, "https://openrouter.ai/api/v1/responses");
+  assert.equal(target.model, "openrouter/free");
+  assert.equal(target.providerRouting?.data_collection, "deny");
+  assert.equal(target.providerRouting?.zdr, undefined);
+  assert.equal(target.headers["X-Title"], "Ubique");
+});
+test("AI provider can explicitly switch back to OpenAI", () => {
+  const target = resolveAiTarget(true, {
+    AI_PROVIDER: "openai",
+    OPENAI_API_KEY: "test-key",
+  });
+  assert.equal(target.provider, "openai");
+  assert.equal(target.endpoint, "https://api.openai.com/v1/responses");
+  assert.equal(target.model, "gpt-5.6-luna");
+  assert.equal(target.providerRouting, undefined);
 });
 test("letter export really is one A4 page; overflow blocked", async () => {
   const pdf = await PDFDocument.load(
