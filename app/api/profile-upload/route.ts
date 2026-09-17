@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { accessToken, checkOrigin, AuthError } from "@/lib/auth";
 import { uploadDrive } from "@/lib/services/documentService";
+import { extractPdfText } from "@/lib/services/pdfTextService";
 import { SheetsRepository, entity } from "@/lib/repositories/store";
 import type { Document } from "@/lib/types";
 import { ai } from "@/lib/services/ai";
@@ -18,13 +19,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     let text = "";
     if (file.name.toLowerCase().endsWith(".pdf")) {
-      const { PDFParse } = await import("pdf-parse");
-      const parser = new PDFParse({ data: buffer });
-      try {
-        text = (await parser.getText()).text;
-      } finally {
-        await parser.destroy();
-      }
+      text = await extractPdfText(buffer);
     } else if (file.name.endsWith(".docx")) {
       const mammoth = await import("mammoth");
       text = (await mammoth.extractRawText({ buffer })).value;
