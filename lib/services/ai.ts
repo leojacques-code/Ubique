@@ -4,6 +4,7 @@ import { resolveAiTarget } from "./aiConfig";
 
 type Options = { fast?: boolean; maxOutputTokens?: number };
 type Provider = "openrouter" | "openai";
+type UnknownRecord = Record<string, unknown>;
 
 export function aiTransportPolicy(provider: Provider) {
   return provider === "openrouter"
@@ -20,6 +21,12 @@ function isTimeout(error: unknown) {
     error instanceof Error &&
     (error.name === "AbortError" || error.name === "TimeoutError")
   );
+}
+
+function asRecord(value: unknown): UnknownRecord | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as UnknownRecord)
+    : undefined;
 }
 
 function jsonPrompt<T>(instruction: string, schema: z.ZodType<T>) {
@@ -66,35 +73,44 @@ export function aiRequestBody<T>(
   };
 }
 
-function extractContent(provider: Provider, result: any) {
+function extractContent(provider: Provider, result: unknown) {
+  const root = asRecord(result);
+  if (!root) return "";
+
   if (provider === "openrouter") {
-    const content = result?.choices?.[0]?.message?.content;
+    const choices = root.choices;
+    if (!Array.isArray(choices) || choices.length === 0) return "";
+    const first = asRecord(choices[0]);
+    const message = asRecord(first?.message);
+    const content = message?.content;
     if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      return content
-        .map((part) =>
-          typeof part === "string"
-            ? part
-            : typeof part?.text === "string"
-              ? part.text
-              : "",
-        )
-        .join("");
-    }
-    return "";
+    if (!Array.isArray(content)) return "";
+    return content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        const record = asRecord(part);
+        return typeof record?.text === "string" ? record.text : "";
+      })
+      .join("");
   }
 
-  return (
-    (typeof result.output_text === "string" ? result.output_text : "") ||
-    (result.output || [])
-      .filter((o: { type: string }) => o.type === "message")
-      .flatMap(
-        (o: { content: { type: string; text?: string }[] }) => o.content || [],
-      )
-      .filter((c: { type: string }) => c.type === "output_text")
-      .map((c: { text: string }) => c.text)
-      .join("")
-  );
+  if (typeof root.output_text === "string" && root.output_text) {
+    return root.output_text;
+  }
+  const output = root.output;
+  if (!Array.isArray(output)) return "";
+  const texts: string[] = [];
+  for (const item of output) {
+    const message = asRecord(item);
+    if (message?.type !== "message" || !Array.isArray(message.content)) continue;
+    for (const part of message.content) {
+      const content = asRecord(part);
+      if (content?.type === "output_text" && typeof content.text === "string") {
+        texts.push(content.text);
+      }
+    }
+  }
+  return texts.join("");
 }
 
 function parseJsonContent(content: string) {
@@ -109,8 +125,9 @@ function parseJsonContent(content: string) {
 async function apiErrorMessage(res: Response, label: string) {
   let detail = "";
   try {
-    const payload = await res.json();
-    if (typeof payload?.error?.message === "string") detail = payload.error.message;
+    const payload = asRecord(await res.json());
+    const error = asRecord(payload?.error);
+    if (typeof error?.message === "string") detail = error.message;
     else if (typeof payload?.message === "string") detail = payload.message;
   } catch {
     // Keep the generic error below.
@@ -214,15 +231,15 @@ export async function ai<T>(
     throw new Error(await apiErrorMessage(res, label));
   }
 
-  const result = await res.json();
-  if (
-    target.provider === "openai" &&
-    result.status &&
-    result.status !== "completed"
-  )
-    throw new Error(
-      "Réponse IA incomplète. Aucun résultat partiel enregistré.",
-    );
+  const result: unknown = await res.json();
+  if (target.provider === "openai") {
+    const status = asRecord(result)?.status;
+    if (typeof status === "string" && status !== "completed") {
+      throw new Error(
+        "Réponse IA incomplète. Aucun résultat partiel enregistré.",
+      );
+    }
+  }
 
   const content = extractContent(target.provider, result);
   if (!content)
