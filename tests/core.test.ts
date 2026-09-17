@@ -156,7 +156,14 @@ test("free AI defaults to OpenRouter chat completions with privacy-conscious rou
     z.object({ name: z.string() }),
     2500,
     target.providerRouting,
-  ) as Record<string, any>;
+  ) as {
+    response_format: { type: string };
+    max_tokens: number;
+    messages: Array<{ role: string }>;
+    provider: { data_collection: string };
+    instructions?: unknown;
+    max_output_tokens?: unknown;
+  };
   assert.equal(body.response_format.type, "json_object");
   assert.equal(body.max_tokens, 2500);
   assert.equal(body.messages[0].role, "system");
