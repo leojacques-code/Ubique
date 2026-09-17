@@ -38,8 +38,9 @@ function jsonPrompt<T>(instruction: string, schema: z.ZodType<T>) {
     rules +
     "\n" +
     instruction +
-    "\nRetourne exclusivement un objet JSON valide conforme à ce schéma. Aucun markdown, aucune explication autour du JSON: " +
-    JSON.stringify(z.toJSONSchema(schema))
+    "\nRetourne exclusivement un objet JSON valide conforme à ce schéma: " +
+    JSON.stringify(z.toJSONSchema(schema)) +
+    "\nAucun markdown, aucune explication autour du JSON."
   );
 }
 
