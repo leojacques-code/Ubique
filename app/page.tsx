@@ -1,4 +1,4 @@
-import { oauthConfigured } from "@/lib/config";
+import { oauthConfigured, configurationStatus } from "@/lib/config";
 import CRM from "@/components/crm";
 import { session } from "@/lib/auth";
 export const dynamic = "force-dynamic";
@@ -16,6 +16,7 @@ export default async function Page({
       signedIn={!!s}
       demoEnabled={process.env.NEXT_PUBLIC_DEMO_MODE !== "false"}
       configured={oauthConfigured()}
+      configuration={configurationStatus()}
     />
   );
 }

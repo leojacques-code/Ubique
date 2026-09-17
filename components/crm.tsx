@@ -132,12 +132,14 @@ export default function CRM({
   signedIn,
   demoEnabled,
   configured,
+  configuration,
 }: {
   initialView?: string;
   initialId?: string;
   signedIn: boolean;
   demoEnabled: boolean;
   configured: boolean;
+  configuration: Record<string, boolean>;
 }) {
   const [data, setData] = useState<Snapshot>(blank);
   const [demo, setDemo] = useState(false);
@@ -492,6 +494,15 @@ export default function CRM({
         company: String(f.get("company") || "Entreprise de démonstration"),
         jobTitle: String(f.get("jobTitle") || "Analyste (démo)"),
         description: String(f.get("description") || ""),
+        officialUrl: String(f.get("url") || ""),
+        vertical: "À analyser",
+        contractType: "",
+        startDate: "",
+        reference: "",
+        location: "",
+        nextActionDate: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         status: "À analyser" as const,
         sources: [],
         isWatch: false,
@@ -592,6 +603,18 @@ export default function CRM({
                 Renseignez les identifiants OAuth et le compte autorisé dans la
                 configuration Vercel. Le guide fourni détaille ces étapes.
               </p>
+              <details>
+                <summary>
+                  Vérifier la configuration de cet environnement
+                </summary>
+                <ul>
+                  {Object.entries(configuration).map(([label, ready]) => (
+                    <li key={label}>
+                      {label} : {ready ? "configuré" : "à configurer"}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </div>
           )}
           {demoEnabled && (
@@ -613,7 +636,7 @@ export default function CRM({
         <div className="brand">
           <span className="brand-icon">U</span>
           <span>
-            Application<span className="brand-sub">PERSONAL CRM</span>
+            Ubique<span className="brand-sub">CANDIDATURES FINANCE</span>
           </span>
         </div>
         <div className="workspace">
